@@ -9,162 +9,81 @@ knitr::opts_chunk$set(echo = TRUE)
 library(deSolve)
 library(dplyr)
 library(ggplot2)
+library(readsdr)
 library(purrr)
-library(yuima)
+library(tidyr)
 ```
 
-
-This is a regular SIR:
-
-```{r}
-sol <- c("S", "I", "R")
-
-mdl <- setModel(drift = c("-beta*S*I/N", "beta*S*I/N - gamma*I", "gamma*I"), 
-         diffusion = rep("0", 3), state.var = c("S", "I", "R"), 
-         xinit = c(990, 10, 0), solve.var = sol)
-
-samp <- setSampling(Terminal = 13, n = 13*100)
-
-yuima_output <- simulate(mdl, true.parameter = list(beta = 2, N = 1000, 
-                                                    gamma = 0.5),
-                         sampling = samp)
-
-o1 <- yuima_output@data@original.data
-```
+# Geometric brownian motion with no drift
 
 ```{r}
-set.seed(1135)
-
-sol <- c("S", "I", "R", "B")
-
-mdl2 <- setModel(drift = c("-B*S*I/N", "B*S*I/N - gamma*I", "gamma*I", "0"), 
-         diffusion = c(rep("0", 3), "B"), state.var = sol, 
-         xinit = c(990, 10, 0, 2), solve.var = sol)
-
-samp <- setSampling(Terminal = 13, n = 13*100)
+file1 <- "./models/GBM_SIR.stmx"
+mdl1  <- read_xmile(file1, const_list = list(diffusion_scale = 0.25))
 
 sims_df <- map_df(1:1000, function(iter) {
-  
-  yuima_output <- simulate(mdl2, true.parameter = list(N = 1000, gamma = 0.5),
-                         sampling = samp)
-  
-  o2 <- yuima_output@data@original.data
-  df      <- as.data.frame(o2)
-  sol     -> colnames(df) 
-  df$time <- seq(0, 13, 0.01)
-  df$iter <- iter
-  df      <- df[, c(5:6, 1:4)]  
+  sd_simulate(mdl1$deSolve_components, start_time = 0 , stop_time = 30, 
+              timestep = 0.1) %>% mutate(iter = iter)
 })
+
+tidy_df <- pivot_longer(sims_df, c(-time, -iter))
+
+stocks_df <- filter(tidy_df, name %in% c("S", "I", "R", "B"))
 ```
 
-
-
 ```{r}
-ggplot(sims_df, aes(x = time, y = B)) +
+ggplot(stocks_df, aes(x = time, y = value)) +
+  facet_wrap(~name, scales = "free") +
   geom_line(aes(group = iter), alpha = 0.2, colour = "grey70") +
   theme_bw()
 ```
 
 
 ```{r}
-summary_df <- sims_df %>% group_by(time) %>% 
-  summarise(y = mean(B),
-            lb = quantile(B, 0.025),
-            ub = quantile(B, 0.975))
+summary_df <- stocks_df %>% group_by(time, name) %>% 
+  summarise(y = mean(value),
+            lb = quantile(value, 0.025),
+            ub = quantile(value, 0.975))
 
 ggplot(summary_df, aes(x = time, y = y)) +
+  facet_wrap(~name, scales = "free") +
   geom_line() +
   geom_ribbon(aes(ymin = lb, ymax = ub), alpha = 0.1) +
   theme_test()
 ```
 
-```{r}
-gBm <- setModel(drift="mu*x", diffusion="sigma*x", solve.variable = "x",
-                state.variable = "x", xinit = 2)
-mdl <- gBm
-params <- list(mu = 0, sigma = 1)
-
-samp <- setSampling(Terminal = 100, n = 100*100)
-
-sims_df2 <- multiple_sims(gBm, 1000, params, samp, "x")
-```
+# Cox–Ingersoll–Ross motion
 
 ```{r}
-summary_df <- sims_df2 %>% group_by(time) %>% 
-  summarise(y = mean(x),
-            lb = quantile(x, 0.025),
-            ub = quantile(x, 0.975))
+file2 <- "./models/CIR_SIR.stmx"
+mdl2  <- read_xmile(file2, const_list = list(diffusion_scale = 0.1,
+                                             adjustment_rate = 0.1,
+                                             goal            = 0.25))
 
-ggplot(summary_df, aes(x = time, y = y)) +
-  geom_line() +
-  #geom_ribbon(aes(ymin = lb, ymax = ub), alpha = 0.1) +
-  theme_test()
-```
-
-```{r}
-library(readsdr)
-filepath <- system.file("models/", "SIR.stmx", package = "readsdr")
-
-# Create the start time, finish time, and time step
-START  <- 0
-FINISH <- 200
-STEP   <- 1/10
-
-# Create time vector
-simtime <- seq(START, FINISH, by = STEP)
-
-# Create stocks vector, with initial values
-stocks  <- c(S = 999,
-             I = 1,
-             R = 0,
-             B = 1)
-
-# Create auxiliaries vector, with values
-auxs    <- c(N     = 1000,
-             gamma = 0.5)
-
-model <- function(time, stocks, auxs){
-  with(as.list(c(stocks, auxs)), {
-    IR <- B * S * I / N
-    RR <- I * gamma
-    
-    d_S_dt <- -IR
-    d_I_dt <- IR - RR
-    d_R_dt <- RR
-    d_B_dt <- B *  sqrt(deSolve::timestep()) * rnorm(1)
-    
-    list(c(d_S_dt, d_I_dt, d_R_dt, d_B_dt))
-  })
-}
-
-
-
-sims_ds <- map_df(1:1000, function(iter) {
-  ode(y = stocks, times = simtime, func = model, parms = auxs, 
-                 method = "euler") %>% data.frame() %>% mutate(iter = iter)
+sims_df <- map_df(1:1000, function(iter) {
+  sd_simulate(mdl2$deSolve_components, start_time = 0 , stop_time = 30, 
+              timestep = 0.1) %>% mutate(iter = iter)
 })
+
+tidy_df <- pivot_longer(sims_df, c(-time, -iter))
+
+stocks_df2 <- filter(tidy_df, name %in% c("S", "I", "R", "B"))
 ```
 
-
 ```{r}
-ggplot(sims_ds, aes(x = time, y = B)) +
+ggplot(stocks_df2, aes(x = time, y = value)) +
+  facet_wrap(~name, scales = "free") +
   geom_line(aes(group = iter), alpha = 0.2, colour = "grey70") +
   theme_bw()
 ```
-
 ```{r}
-summary_df <- sims_ds %>% group_by(time) %>% 
-  summarise(y = mean(B),
-            lb = quantile(B, 0.025),
-            ub = quantile(B, 0.975))
+summary_df <- stocks_df2 %>% group_by(time, name) %>% 
+  summarise(y = mean(value),
+            lb = quantile(value, 0.025),
+            ub = quantile(value, 0.975))
 
 ggplot(summary_df, aes(x = time, y = y)) +
+  facet_wrap(~name, scales = "free") +
   geom_line() +
   geom_ribbon(aes(ymin = lb, ymax = ub), alpha = 0.1) +
   theme_test()
-```
-```{r}
-ggplot(sims_ds, aes(x = time, y = I)) +
-  geom_line(aes(group = iter), alpha = 0.2, colour = "grey70") +
-  theme_bw()
 ```
