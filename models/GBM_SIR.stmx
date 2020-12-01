@@ -54,7 +54,7 @@
 				<eqn>0.5</eqn>
 			</aux>
 			<flow name="dB">
-				<eqn>B * diffusion_scale * SQRT(DT) * NORMAL(0,  1)</eqn>
+				<eqn>B * diffusion_scale * SQRT(DT) * NORMAL(0,  1) / DT</eqn>
 			</flow>
 			<aux name="diffusion scale">
 				<eqn>0.2</eqn>

@@ -7,7 +7,7 @@
 		<vendor>isee systems, inc.</vendor>
 		<product version="2.0" isee:build_number="2190" isee:saved_by_v1="true" lang="en">Stella Architect</product>
 	</header>
-	<sim_specs isee:sim_duration="1.5" isee:simulation_delay="0.00753769" isee:restore_on_start="false" method="Euler" time_units="Months" isee:instantaneous_flows="false" isee:loop_scores="true" isee:loop_exhaustive_allowed="1000">
+	<sim_specs isee:sim_duration="1.5" isee:simulation_delay="0.00753769" isee:restore_on_start="false" method="Euler" time_units="Months" isee:instantaneous_flows="false" isee:loop_scores="false" isee:loop_exhaustive_allowed="1000">
 		<start>1</start>
 		<stop>200</stop>
 		<dt reciprocal="true">32</dt>
@@ -54,7 +54,7 @@
 				<eqn>0.5</eqn>
 			</aux>
 			<flow name="dB">
-				<eqn>(adjustment_rate * (goal - B))   + (SQRT(B) * diffusion_scale * SQRT(DT) * NORMAL(0,  1))</eqn>
+				<eqn>(adjustment_rate * (goal - B))   + (SQRT(B) * diffusion_scale * SQRT(DT) * NORMAL(0,  1) / DT)</eqn>
 			</flow>
 			<aux name="adjustment rate">
 				<eqn>0.1</eqn>
