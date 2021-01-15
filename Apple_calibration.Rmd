@@ -1,0 +1,330 @@
+---
+title: "Apple_data calibration"
+output:
+  pdf_document: default
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(lubridate)
+library(readr)
+library(tidyr)
+
+```
+
+
+## Apple mobility data
+
+```{r, fig.height = 7}
+filepath        <- "./Data/Apple/applemobilitytrends-2020-06-03.csv"
+raw_data        <- read_csv(filepath)
+
+all_transp_data <- raw_data %>% filter(region == "Ireland") %>% 
+  dplyr::select(-geo_type, -alternative_name, -`sub-region`, -country) %>% 
+  pivot_longer(c(-region, -transportation_type), 
+               names_to = "date", values_to = "index") %>% 
+  mutate(date = as_date(date)) %>% 
+  filter(date >= "2020-02-28", date < "2020-05-06") 
+
+driving_data <- all_transp_data %>%
+  filter(transportation_type == "driving",
+         date != "2020-02-28") %>% 
+  mutate(time = row_number()) %>% 
+  rename(y = index) %>% 
+  select(time, y)
+
+ggplot(all_transp_data, aes(x = date, y = index)) +
+  geom_line(colour = "grey") +
+  geom_point(colour = "steelblue", size = 0.5) +
+  scale_x_date() +
+  theme_pubclean() +
+  facet_wrap(~transportation_type, scales = "free",
+             ncol = 1)
+```
+
+```{r}
+Csnippet("
+  y = rnorm(S, tau);  
+  ") -> rmeas
+
+Csnippet("
+  lik = dnorm(y, S, tau,give_log) + 1e-5;
+") -> dmeas
+
+Csnippet("
+  S = 141;
+") -> rinit
+
+Csnippet("
+  double dW = rnorm(0,sqrt(dt));
+  S+= sigma*S*dW;
+") -> apple_GBM_step
+
+sigma_guess <- 0.5
+tau_guess   <- 2
+
+params <- c(sigma = sigma_guess, tau = tau_guess)
+
+driving_data %>%
+pomp(
+  times = "time", t0 = 0,
+  rinit = rinit,
+  rprocess = euler(apple_GBM_step, delta.t = 0.01),
+  statenames = c("S"),
+  paramnames = c("sigma", "tau"),
+  params = params,
+  rmeasure = rmeas,
+  dmeasure = dmeas,
+  partrans = parameter_trans(log   = c("sigma", "tau"))
+) -> apple_GBM
+```
+
+## Likelihood
+
+```{r}
+registerDoParallel(cores = 6)
+registerDoRNG(652643293)
+
+foreach (i = 1:10, .combine = c) %dopar% {
+  apple_GBM %>% pfilter(Np = 5000)
+} -> pf
+logLik(pf) -> ll
+logmeanexp(ll, se=TRUE)
+```
+
+```{r}
+  slice_design(
+    center = coef(apple_GBM),
+    sigma  = rep(seq(from = 0, to = 1, length = 40), each = 3),
+    tau    = rep(seq(from = 0, to = 4, length = 40), each= 3)
+  ) -> p
+
+registerDoParallel(cores = 6)
+registerDoRNG(108028909)
+
+
+# 182 secs
+tic()
+foreach (theta = iter(p,"row"), .combine = rbind, .inorder=FALSE) %dopar%
+    {
+      apple_GBM %>% pfilter(params = theta, Np=5000) -> pf
+      theta$loglik <- logLik(pf)
+      theta
+    } -> p
+toc()
+```
+
+```{r}
+p %>% 
+  gather(variable, value, sigma, tau) %>%
+  filter(variable == slice,
+         loglik > -1000) %>%
+  ggplot(aes(x = value, y = loglik, color = variable))+
+  geom_point() +
+  facet_grid(~variable, scales = "free_x")+
+  guides(color = FALSE) +
+  labs(x="Parameter value",color="") +
+  theme_pubclean()
+```
+
+```{r}
+file_path <- "./Saved_objects/Apple/surface_exploration_driving_normal.rds"
+
+
+# This process takes 1.3 hours
+
+if(!file.exists(file_path)) {
+  expand.grid(
+  tau   = rep(seq(from=0, to = 4, length = 40), each = 3),
+  sigma = rep(seq(from=0, to = 1,length = 40), each = 3)) -> p
+
+  registerDoParallel(cores = detectCores() - 2)
+  registerDoRNG(421776444)
+
+  tic()
+  
+  foreach (theta = iter(p,"row"), .combine = rbind, .inorder=FALSE) %dopar%
+    {
+      apple_GBM %>% pfilter(params = theta, Np = 5000) -> pf
+      theta$loglik <- logLik(pf)
+      theta
+    } -> p
+  toc()
+  saveRDS(p, file_path)
+} else {
+  p <- readRDS(file_path)
+}
+
+p <- p %>% arrange(tau, sigma)
+```
+
+```{r}
+p %>% filter(!is.infinite(loglik)) %>% 
+  mutate(loglik=ifelse(loglik>max(loglik)-50,loglik,NA)) %>%
+  ggplot(aes(x = tau, y= sigma, z=loglik,fill=loglik))+
+  geom_tile(color=NA)+
+  scale_fill_viridis_c()+
+  labs(x=expression(tau),y = expression(sigma))
+```
+
+```{r}
+tic()
+registerDoRNG(482947940)
+
+foreach(i=1:20,.combine = c) %dopar% {
+
+  apple_GBM %>%
+      mif2(
+        params = params,
+        Np = 2000, Nmif = 50,
+        cooling.fraction.50 =0.5,
+        rw.sd=rw.sd(sigma = 0.02, tau = 0.02)
+      )
+  } -> mifs_local
+toc()
+```
+
+```{r}
+mifs_local %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+```
+
+```{r}
+registerDoRNG(900242057)
+
+tic()
+
+foreach(mf=mifs_local,.combine=rbind) %dopar% {
+  evals <- replicate(10, logLik(pfilter(mf,Np=20000)))
+  ll <- logmeanexp(evals,se=TRUE)
+  mf %>% coef() %>% bind_rows() %>%
+    bind_cols(loglik=ll[1],loglik.se=ll[2])
+} -> results
+toc()
+```
+
+```{r}
+pairs(~loglik+tau+sigma, data=results,pch=16)
+```
+
+# Global search
+
+```{r}
+file_path <- "./Saved_objects/Apple/Global_search_training_normal.rds"
+
+if(!file.exists(file_path)) {
+  set.seed(2062379496)
+
+runif_design(
+  lower = c(tau = 0, sigma = 0.05),
+  upper = c(tau = 5, sigma = 0.5),
+  nseq  = 300
+) -> guesses
+
+
+
+mf1 <- mifs_local[[1]]
+registerDoParallel(cores = detectCores() - 2)
+registerDoRNG(1270401374)
+
+# 14 hours
+tic()
+
+foreach(guess=iter(guesses,"row"), .combine=rbind) %dopar% {
+  mf1 %>%
+    mif2(params = c(unlist(guess))) %>%
+    mif2(Nmif= 100) -> mf
+    replicate(
+      10,
+      mf %>% pfilter(Np = 100000) %>% logLik()
+    ) %>%
+      logmeanexp(se=TRUE) -> ll
+    mf %>% coef() %>% bind_rows() %>%
+      bind_cols(loglik = ll[1],loglik.se=ll[2])
+  } -> results
+toc()
+saveRDS(results, file_path)
+} else {
+  results <- readRDS(file_path)  
+}
+
+```
+
+```{r}
+results %>% filter(loglik>max(loglik)-50) %>%
+  bind_rows(guesses) %>%
+  mutate(type=if_else(is.na(loglik),"guess","result")) %>%
+  arrange(type) -> all
+
+pairs(~loglik+tau+sigma, data=all,
+      col=ifelse(all$type=="guess",grey(0.5),"red"),pch=16)
+```
+
+```{r}
+pm_likelihood(all)
+```
+
+```{r}
+filter(all, type == "result") %>% 
+  select(-type) %>% 
+  filter(loglik > max(loglik)-20) %>%
+  sapply(range) -> box
+
+set.seed(1196696958)
+
+profile_design(
+  tau   = seq(0.05, 10,length = 40),
+  lower = box[1, c("sigma")],
+  upper = box[2, c("sigma")],
+  nprof = 15, type="runif"
+) -> guesses
+plot(guesses)
+```
+
+
+```{r}
+filename <- "./Saved_objects/Apple/Tau_profile_normal.rds"
+
+if(!file.exists(filename)) {
+  mf1 <- mifs_local[[1]]
+  
+  registerDoRNG(830007657)
+
+  tic()
+  foreach(guess = iter(guesses,"row"), .combine=rbind) %dopar% {
+    
+    mf1 %>%
+    mif2(params = c(unlist(guess)),
+         rw.sd = rw.sd(sigma = 0.02)) %>%
+      mif2(Nmif = 100, cooling.fraction.50 = 0.3) -> mf
+    
+    replicate(
+      10,
+      mf %>% pfilter(Np = 100000) %>% logLik()) %>%
+      logmeanexp(se=TRUE) -> ll
+    
+    mf %>% coef() %>% bind_rows() %>%
+      bind_cols(loglik=ll[1],loglik.se=ll[2])
+  } -> results
+toc()
+saveRDS(results, filename)
+} else {
+  results <- readRDS(filename)
+}
+```
+
+```{r}
+filter(results, loglik>max(loglik)-10) -> all
+
+pairs(~loglik+tau+sigma, data= all, pch=16)
+```
