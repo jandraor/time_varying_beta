@@ -9,11 +9,15 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 
 library(dplyr)
+library(doParallel)
+library(doRNG)
 library(ggplot2)
 library(ggpubr)
 library(lubridate)
+library(pomp)
 library(readr)
 library(tidyr)
+library(tictoc)
 
 ```
 
@@ -80,7 +84,8 @@ pomp(
   params = params,
   rmeasure = rmeas,
   dmeasure = dmeas,
-  partrans = parameter_trans(log   = c("sigma", "tau"))
+  partrans = parameter_trans(log   = c("sigma", "tau")),
+  cdir     =".", cfile = "apple_GBM"
 ) -> apple_GBM
 ```
 
@@ -91,6 +96,8 @@ registerDoParallel(cores = 6)
 registerDoRNG(652643293)
 
 foreach (i = 1:10, .combine = c) %dopar% {
+  library(dplyr)
+  library(pomp)
   apple_GBM %>% pfilter(Np = 5000)
 } -> pf
 logLik(pf) -> ll
@@ -112,6 +119,8 @@ registerDoRNG(108028909)
 tic()
 foreach (theta = iter(p,"row"), .combine = rbind, .inorder=FALSE) %dopar%
     {
+      library(dplyr)
+      library(pomp)
       apple_GBM %>% pfilter(params = theta, Np=5000) -> pf
       theta$loglik <- logLik(pf)
       theta
