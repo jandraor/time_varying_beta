@@ -1,4 +1,4 @@
-likelihood_slice <- function(combinations, folder) {
+likelihood_slice <- function(model, combinations, folder) {
   ll_slice_list <- purrr::map(combinations, function(indexes) {
     i       <- indexes[[1]]
     j       <- indexes[[2]]
@@ -19,7 +19,7 @@ likelihood_slice <- function(combinations, folder) {
       
       foreach (theta = iter(p,"row"), .combine = rbind, .inorder=FALSE) %dopar%
         {
-          SEI3R_GBM %>% pfilter(params = theta, Np = 5000) -> pf
+          model %>% pfilter(params = theta, Np = 5000) -> pf
           theta$loglik <- logLik(pf)
           theta
         } -> p
