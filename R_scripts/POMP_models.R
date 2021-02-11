@@ -15,13 +15,13 @@ get_POMP_model <- function(obs_df, params) {
     I = 0;
     A = 0;
     R = 0;
-    B = 1;
+    B = B_0;
     C = 0;
   ") -> rinit
   
   Csnippet("
     double dW     = rnorm(0,sqrt(dt));
-    double lambda = zeta * B * (I + P + mu * A) / N;
+    double lambda = B * (I + P + mu * A) / N;
     S-= (S * lambda)*dt;
     E+= (S * lambda - sigma*E)*dt;
     P+= (omega * sigma * E - eta * P) * dt;
@@ -45,7 +45,7 @@ get_POMP_model <- function(obs_df, params) {
       accumvars = "C",
       rmeasure = rmeas,
       dmeasure = dmeas,
-      partrans = parameter_trans(log   = c("zeta", "P_0"))
+      partrans = parameter_trans(log   = c("B_0", "P_0"))
     ) -> SEI3R_GBM
   
 }
