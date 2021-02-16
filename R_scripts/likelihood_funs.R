@@ -52,10 +52,7 @@ mif_ll <- function(mf_list, Np = 100000, seed, n_cores, filename) {
     
     tic.clearlog()
     tic()
-  
-    registerDoRNG(seed)
-    registerDoParallel(cores = n_cores)
-  
+
     foreach(mf = mf_list, .combine = rbind) %dopar% {
       
       library(dplyr)
