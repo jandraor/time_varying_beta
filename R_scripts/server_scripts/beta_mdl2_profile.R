@@ -48,7 +48,7 @@ pomp_mdl <- pomp_SEI3R_GBM2(obs_df, params)
 #===============================================================================
 source("./R_scripts/local_search.R")
 
-fn     <- "./Saved_objects/Irish_data/SEI3R_GBM/delete.rds"
+fn     <- "./Saved_objects/Irish_data/SEI3R_GBM/local_search2.rds"
 ptb    <- rw.sd(zeta = 0.02, P_0 = ivp(0.02), tau = 0.02)
 seed   <- 482947940
 ls_obj <- local_search(pomp_mdl, params, ptb, fn, seed)
