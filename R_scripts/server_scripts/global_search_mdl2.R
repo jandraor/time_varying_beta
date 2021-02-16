@@ -25,4 +25,4 @@ gs_obj <- global_search(guesses, fixed_params, mf1, fn, seed, 7)
 source("./R_scripts/likelihood_funs.R")
 
 fn     <- "./Saved_objects/Irish_data/SEI3R_GBM/test_Global_search2_ll.rds"
-ll_obj <- mif_ll(gs_obj[1:7], Np = 100000, 1270401374, 7, filename)
+ll_obj <- mif_ll(gs_obj[1:7], Np = 100000, 1270401374, 7, fn)
