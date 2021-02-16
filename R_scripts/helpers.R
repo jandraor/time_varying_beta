@@ -21,3 +21,8 @@ discrete_net_change <- function(sim_df, cumulative_var) {
    
    temp_df[, c("time", "value")]
 }
+
+calculate_time <- function(t_list) {
+  t_obj <- t_list[[1]]
+  (t_obj$toc - t_obj$tic) / 60
+}
