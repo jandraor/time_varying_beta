@@ -20,4 +20,4 @@ runif_design(
 fn     <- "./Saved_objects/Irish_data/SEI3R_GBM/test_Global_search2.rds"
 seed   <- 1270401374
 source("./R_scripts/global_search.R")
-gs_obj <- global_search(guesses[1:14], fixed_params, mf1, fn, seed, 7)
+gs_obj <- global_search(guesses[1:14, ], fixed_params, mf1, fn, seed, 7)
