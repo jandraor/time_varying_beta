@@ -4,11 +4,13 @@
 library(doParallel)
 library(doRNG)
 library(dplyr)
+library(imputeTS)
 library(lubridate)
 library(pomp)
 library(readr)
 library(readxl)
 library(stringr)
+library(tidyr)
 library(tictoc)
 #===============================================================================
 # Data
@@ -52,7 +54,7 @@ source("./R_scripts/local_search.R")
 fn     <- "./Saved_objects/Irish_data/SEI3R_GBM/local_search2.rds"
 ptb    <- rw.sd(zeta = 0.02, P_0 = ivp(0.02), tau = 0.02)
 seed   <- 482947940
-ls_obj <- local_search(pomp_mdl, params, ptb, fn, seed)
+ls_obj <- local_search(pomp_mdl, params, ptb, fn, seed, 7)
 
 # source("./R_scripts/likelihood_funs.R")
 # 

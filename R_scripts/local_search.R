@@ -1,9 +1,10 @@
 
-local_search <- function(pomp_mdl, params, ptb, fn, seed) {
+local_search <- function(pomp_mdl, params, ptb, fn, seed, n_cores) {
   
   if(!file.exists(fn)) {
     tic.clearlog()
     tic()
+    registerDoParallel(cores = n_cores)
     registerDoRNG(seed)
     
     foreach(i = 1:20,.combine = c) %dopar% {
