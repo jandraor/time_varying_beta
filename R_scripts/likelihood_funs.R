@@ -50,6 +50,8 @@ mif_ll <- function(mf_list, Np = 100000, seed, n_cores, filename) {
     registerDoRNG(seed)
     registerDoParallel(cores = n_cores)
     
+    message(paste0("Number of working cores: "), getDoParWorkers())
+    
     tic.clearlog()
     tic()
 
