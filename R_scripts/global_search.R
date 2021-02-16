@@ -1,6 +1,6 @@
 global_search <- function(guesses, fixed_params, mf1, fn, seed, n_cores) {
   
-  if(!file.exists(file_path)) {
+  if(!file.exists(fn)) {
     
     registerDoParallel(cores = n_cores)
     registerDoRNG(seed)
