@@ -24,13 +24,3 @@ global_search <- function(guesses, fixed_params, mf1, fn, seed, n_cores) {
   
   results
 }
-
-
-# replicate(
-#   10,
-#   mf %>% pfilter(Np = 100000) %>% logLik()
-# ) %>%
-#   logmeanexp(se=TRUE) -> ll
-# 
-# mf %>% coef() %>% bind_rows() %>%
-#   bind_cols(loglik = ll[1],loglik.se=ll[2])
