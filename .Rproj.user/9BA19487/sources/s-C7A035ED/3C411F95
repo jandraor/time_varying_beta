@@ -1,0 +1,25 @@
+{
+    "id": "3C411F95",
+    "path": "~/GitHub/time_varying_beta/R_scripts/server_scripts/global_search_mdl2.R",
+    "project_path": "R_scripts/server_scripts/global_search_mdl2.R",
+    "type": "r_source",
+    "hash": "3074031023",
+    "contents": "",
+    "dirty": false,
+    "created": 1613439897104.0,
+    "source_on_save": false,
+    "relative_order": 9,
+    "properties": {
+        "tempName": "Untitled4",
+        "cursorPosition": "14,34",
+        "scrollLine": "8"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1613441837,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1613441837683,
+    "read_only": false,
+    "read_only_alternatives": []
+}

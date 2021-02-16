@@ -1,0 +1,25 @@
+{
+    "id": "C71CC75F",
+    "path": "~/GitHub/time_varying_beta/R_scripts/global_search.R",
+    "project_path": "R_scripts/global_search.R",
+    "type": "r_source",
+    "hash": "3400502807",
+    "contents": "",
+    "dirty": false,
+    "created": 1613440004171.0,
+    "source_on_save": false,
+    "relative_order": 10,
+    "properties": {
+        "tempName": "Untitled5",
+        "cursorPosition": "10,50",
+        "scrollLine": "8"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1613441576,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1613441576042,
+    "read_only": false,
+    "read_only_alternatives": []
+}
