@@ -6,8 +6,8 @@ source("./R_scripts/server_scripts/local_search_mdl2.R")
 #===============================================================================
 # Global search
 #===============================================================================
-mf1          <- ls_obj$result # Comes from previous script
-fixed_params <- par_obj$fixed # Comes from previous script
+mf1          <- ls_obj$result[[1]] # Comes from previous script
+fixed_params <- par_obj$fixed      # Comes from previous script
 
 set.seed(58741564)
 
