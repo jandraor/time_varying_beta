@@ -1,6 +1,7 @@
 get_params <- function(mdl_id) {
   
   zeta_guess  <- 3 / 5
+  B_guess     <- zeta_guess
   P_guess     <- 1
   
   N_val       <- 4999970
@@ -17,11 +18,13 @@ get_params <- function(mdl_id) {
                   sigma = sigma_val, alpha = alpha_val, eta = eta_val, 
                   kappa = kappa_val, rho = rho_val)
   
-  unknown_pars <- c(zeta = zeta_guess, P_0 = P_guess)
+  if(mdl_id == "1") {
+    unknown_pars <- c(B_0 = B_guess, P_0 = P_guess)
+  }
   
   if(mdl_id == "2") {
     tau_guess    <- 1
-    unknown_pars <- c(unknown_pars, tau = tau_guess)
+    unknown_pars <- c(zeta = zeta_guess, P_0 = P_guess, tau = tau_guess)
   }
   
   params       <- c(fixed_pars, unknown_pars)

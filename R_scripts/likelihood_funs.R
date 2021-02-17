@@ -19,6 +19,8 @@ iter_filt_profile <- function(mf1, guesses, fixed_params, perturbations,
     registerDoRNG(seed)
     registerDoParallel(cores = n_cores)
     
+    message(paste0("Number of working cores: "), getDoParWorkers())
+    
     tic.clearlog()
     tic()
     
