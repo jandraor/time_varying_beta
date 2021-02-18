@@ -31,3 +31,8 @@ ifp_obj <- iter_filt_profile(mf1 = mf1,
                              perturbations = ptb,
                              filename = fn,
                              seed = 95591631)
+
+fn <- "./Saved_objects/Irish_data/SEI3R_GBM/Beta_profile_mdl2_2.rds"
+
+ll_beta_obj <- mif_ll(ifp_obj$mif_results, seed = 22201254, n_cores = 7,
+                  filename = fn)
