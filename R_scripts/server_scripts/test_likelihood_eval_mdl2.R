@@ -7,6 +7,7 @@ library(dplyr)
 library(imputeTS)
 library(lubridate)
 library(pomp)
+library(purrr)
 library(readr)
 library(readxl)
 library(stringr)
@@ -47,6 +48,8 @@ params   <- par_obj$all
 pomp_mdl <- pomp_SEI3R_GBM2(obs_df, params)
 
 source("./R_scripts/likelihood_funs.R")
+
+source("./R_scripts/helpers.R")
 
 Np_tries <- c(5e3, 1e4, 5e4, 1e5, 2.5e5, 5e5, 1e6, 2e6, 5e6)
 
