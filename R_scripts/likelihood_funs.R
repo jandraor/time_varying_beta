@@ -1,8 +1,9 @@
-estimate_avg_lik <- function(pomp_mdl, seed, cores, Np = 5000) {
+estimate_avg_lik <- function(pomp_mdl, seed, cores, Np = 5000,
+                             n_iter = 10) {
   registerDoParallel(cores = 6)
-  registerDoRNG(652643293)
+  registerDoRNG(seed)
   
-  foreach (i = 1:10, .combine = c) %dopar% {
+  foreach (i = 1:n_iter, .combine = c) %dopar% {
     library(dplyr)
     library(pomp)
     pomp_mdl %>% pfilter(Np = Np)
