@@ -91,7 +91,7 @@ runif_design(
   nseq  = 300
 ) -> guesses
 
-fn     <- "./Saved_objects/Irish_data/SEI3R_CIR/test_Global_search_wkl.rds"
+fn     <- "./Saved_objects/Irish_data/SEI3R_CIR/Global_search_wkl.rds"
 seed   <- 435367905
 source("./R_scripts/global_search.R")
 gs_obj <- global_search(guesses, fixed_params, mf1, fn, seed, 7)
