@@ -11,9 +11,20 @@ global_search <- function(guesses, fixed_params, mf1, fn, seed, n_cores) {
     foreach(guess=iter(guesses,"row"), .combine = c) %dopar% {
       library(dplyr)
       library(pomp)
-      mf1 %>%
-        mif2(params = c(unlist(guess), fixed_params)) %>%
-        mif2(Nmif = 100) -> mf
+      
+      out <- tryCatch({
+        mf1 %>%
+          mif2(params = c(unlist(guess), fixed_params)) %>%
+          mif2(Nmif = 100) -> mf
+      },
+      error = function(cond) {
+        message(cond)
+        message("Guess: ")
+        message(unlist(guess))
+        return(NA)
+      })
+      
+      return(out)
     } -> mf_results
     
     toc(quiet = FALSE, log = TRUE)

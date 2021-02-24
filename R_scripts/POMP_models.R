@@ -1,40 +1,39 @@
 get_params <- function(mdl_id) {
   
   zeta_guess  <- 3 / 5
-  tau_guess    <- 1
+  tau_guess   <- 1
   B_guess     <- zeta_guess
   P_guess     <- 1
+  alpha_guess <- 0.1
   
   N_val       <- 4999970
   gamma_val   <- 1 / 3 # Clinical
   sigma_val   <- 1 / 3
   rho_val     <- 1
-  alpha_val   <- 0.1
   mu_val      <- 1 / 2 # Relative infectiousness
   omega_val   <- 0.7 # Clinical fraction
   eta_val     <- 1 / 2.1 # Preclinical
   kappa_val   <- 1 / 5 # Subclinical
   
   fixed_pars <- c(N = N_val, mu = mu_val, omega = omega_val, gamma = gamma_val,
-                  sigma = sigma_val, alpha = alpha_val, eta = eta_val, 
-                  kappa = kappa_val, rho = rho_val)
+                  sigma = sigma_val, eta = eta_val, kappa = kappa_val,
+                  rho = rho_val)
   
   if(mdl_id == "1") {
     unknown_pars <- c(B_0 = B_guess, P_0 = P_guess)
   }
   
-  if(mdl_id == "2") {
-    unknown_pars <- c(zeta = zeta_guess, P_0 = P_guess, tau = tau_guess)
+  if(mdl_id == "GBM_2") {
+    unknown_pars <- c(zeta = zeta_guess, P_0 = P_guess, tau = tau_guess,
+                      alpha = alpha_guess)
   }
   
   if(mdl_id == "CIR") {
-    alpha_guess   <- 0.1
     nu_guess      <- 0.04
     upsilon_guess <- 0.1
     unknown_pars  <- c(zeta = zeta_guess, P_0 = P_guess, tau = tau_guess,
                        nu = nu_guess, upsilon = upsilon_guess,
                        alpha = alpha_guess)
-    fixed_pars <- fixed_pars[names(fixed_pars) != "alpha"]
   }
   
   params       <- c(fixed_pars, unknown_pars)
@@ -146,7 +145,7 @@ pomp_SEI3R_GBM2 <- function(obs_df, params) {
       accumvars = "C",
       rmeasure = rmeas,
       dmeasure = dmeas,
-      partrans = parameter_trans(log   = c("zeta", "P_0", "tau")),
+      partrans = parameter_trans(log   = c("zeta", "P_0", "tau", "alpha")),
       obsnames = c("y1", "y2"),
       cdir = ".", 
       cfile= "SEI3R_GBM2"
