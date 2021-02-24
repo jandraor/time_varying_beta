@@ -1,4 +1,4 @@
-
+# fn Filename
 local_search <- function(pomp_mdl, params, ptb, fn, seed, n_cores) {
   
   if(!file.exists(fn)) {
@@ -20,7 +20,7 @@ local_search <- function(pomp_mdl, params, ptb, fn, seed, n_cores) {
         ) 
     } -> mifs_local
     
-    toc(quiet = TRUE, log = TRUE)
+    toc(quiet = FALSE, log = TRUE)
     log.lst <- tic.log(format = FALSE)
     result_list  <- list(result = mifs_local, time = log.lst)
     saveRDS(result_list, fn)

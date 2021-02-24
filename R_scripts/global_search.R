@@ -9,6 +9,8 @@ global_search <- function(guesses, fixed_params, mf1, fn, seed, n_cores) {
     tic()
     
     foreach(guess=iter(guesses,"row"), .combine = c) %dopar% {
+      library(dplyr)
+      library(pomp)
       mf1 %>%
         mif2(params = c(unlist(guess), fixed_params)) %>%
         mif2(Nmif = 100) -> mf
