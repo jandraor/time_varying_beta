@@ -8,7 +8,8 @@ global_search <- function(guesses, fixed_params, mf1, fn, seed, n_cores) {
     tic.clearlog()
     tic()
     
-    foreach(guess=iter(guesses,"row"), .combine = c) %dopar% {
+    foreach(guess = iter(guesses,"row"), .combine = c, 
+            .errorhandling='pass') %dopar% {
       library(dplyr)
       library(pomp)
       
@@ -18,10 +19,9 @@ global_search <- function(guesses, fixed_params, mf1, fn, seed, n_cores) {
           mif2(Nmif = 100) -> mf
       },
       error = function(cond) {
-        message(cond)
-        message("Guess: ")
-        message(unlist(guess))
-        return(NA)
+        error_list <- list(list(guess = unlist(guess),
+                           error = cond))
+        return(error_list)
       })
       
       return(out)
