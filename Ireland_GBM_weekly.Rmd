@@ -1,0 +1,210 @@
+---
+title: "SEI3R GBM"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE,
+                      message = FALSE)
+
+library(deSolve)
+library(doParallel)
+library(doRNG)
+library(dplyr)
+library(imputeTS)
+library(lubridate)
+library(pomp)
+library(purrr)
+library(readr)
+library(readxl)
+library(stringr)
+library(tictoc)
+library(tidyr)
+
+folder <- "./Saved_objects/Irish_data/SEI3R_GBM/weekly"
+```
+
+# Data
+
+## Incidence data
+
+```{r}
+source("./R_scripts/irish_data.R")
+
+irish_data  <- get_irish_data()
+total_cases <- sum(irish_data$y)
+```
+
+### Epicurve 
+
+```{r, fig.height = 2.5}
+source("./R_scripts/plots.R")
+formatted_tc <- format(total_cases, big.mark = ",")
+daily_epicurve(irish_data, formatted_tc)
+```
+
+### Trend
+
+```{r g_trend_incidence, fig.height = 2.5}
+source("./R_scripts/plots.R")
+
+daily_epi_trend(irish_data)
+```
+
+### Weekly data
+
+```{r}
+wkl_inc <- irish_data %>% slice(1:77)%>%
+  mutate(week = ((time - 1) %/% 7) + 1) %>% 
+  group_by(week) %>% summarise(y = sum(y)) %>% 
+  mutate(time = week * 7)
+```
+
+```{r}
+weekly_epicurve(wkl_inc)
+```
+
+## Apple mobility
+
+```{r}
+source("./R_scripts/apple.R")
+
+apple_data <- get_apple_data(start_date = "2020-02-28",
+                             end_date = "2020-05-17")
+
+driving_data <- filter(apple_data, transportation_type == "driving")
+first_val    <- driving_data[1, "index"] %>% as.numeric()
+
+driving_data <- driving_data %>% mutate(index = index / first_val,
+                                        time = row_number() - 1) %>% 
+  slice(-1)
+raw_data     <- driving_data$index
+imp          <- na_interpolation(raw_data)
+```
+
+```{r, fig.height = 3.5}
+driving_missing_data(raw_data)
+```
+
+```{r, fig.height= 3.5}
+imputed_driving_data(raw_data, imp)
+```
+
+# Model
+
+```{r}
+wkl_df <- wkl_inc %>% rename(y1 = y) %>% 
+  mutate(y2 = imp[1:length(imp) %% 7 == 0])
+```
+
+```{r}
+#===============================================================================
+# Model setup
+#===============================================================================
+
+source("./R_scripts/POMP_models.R")
+
+par_obj  <- get_params("GBM_2")
+params   <- par_obj$all
+pomp_mdl <- pomp_SEI3R_GBM2(wkl_df, params)
+```
+
+## Test likelihood variance
+
+```{r, test_lik_var}
+source("./R_scripts/likelihood_funs.R")
+
+fn <- file.path(folder, "pf_sensitivity_mdl2.rds")
+n_particles <- c(5e4, 1e5, 2.5e5, 5e5, 1e6, 2e6)
+sens_results <- pf_sensitivity(n_particles = n_particles, n_cores = 7, 
+                               seed = 949549845, pomp_mdl = pomp_mdl, fn = fn,
+                               n_iter = 14)
+```
+
+## Local search
+
+```{r}
+source("./R_scripts/local_search.R")
+ptb    <- rw.sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, alpha = 0.02)
+fn     <- file.path(folder, "local_search_mdl2.rds")
+ls_obj <- local_search(pomp_mdl, params, ptb, fn, 126842004, 7)
+```
+
+```{r}
+mifs_local <- ls_obj$result
+
+mifs_local %>%
+  traces() %>%
+  melt() -> traces_df 
+
+traces_df %>% 
+  filter(variable %in% c("loglik", "zeta", "P_0", "tau", "alpha")) %>%
+  ggplot(aes(x= iteration,y = value,group = L1,color = factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+```
+
+```{r}
+traces_df %>% filter(variable == "loglik") %>% 
+  ggplot(aes(x= iteration,y = value,group = L1,color = factor(L1)))+
+  geom_line()+
+  scale_y_continuous(limits = c(-200, 0)) +
+  guides(color=FALSE) +
+  theme_pubclean()
+```
+
+```{r}
+source("./R_scripts/likelihood_funs.R")
+fn <- file.path(folder, "local_search_mdl2_ll.rds")
+
+ll_local_search_obj <- mif_ll(mifs_local, seed = 359084918, n_cores = 7,
+                              filename = fn)
+```
+
+```{r}
+ll_local_search_obj$ll_results -> all
+
+pairs(~loglik+zeta + P_0 + alpha + tau,data=all,pch=16)
+```
+
+## Global search
+
+```{r}
+mf1          <- ls_obj$result[[1]] 
+fixed_params <- par_obj$fixed      
+
+set.seed(76393492)
+
+runif_design(
+  lower = c(zeta = 0.1, P_0 = 1,  tau = 0.05, alpha = 0.05),
+  upper = c(zeta = 3,   P_0 = 30, tau = 3, alpha = 0.3),
+  nseq  = 300
+) -> guesses
+
+fn     <- file.path(folder, "Global_search_mdl2.rds")
+seed   <- 971112215
+source("./R_scripts/global_search.R")
+gs_obj <- global_search(guesses, fixed_params, mf1, fn, seed, 7)
+```
+
+```{r}
+mifs_global <- extract_mif_results(gs_obj$mf_results)
+
+mifs_global %>% 
+  traces() %>%
+  melt() -> traces_df 
+
+traces_df %>% 
+  filter(variable %in% c("loglik", "zeta", "P_0", "tau", "alpha")) %>%
+  ggplot(aes(x= iteration,y = value, group = L1))+
+  geom_line(colour = "grey70", alpha = 0.25)+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y") +
+  theme_pubr()
+```
+
+```{r}
+source("./R_scripts/plots.R")
+loglik_traces(traces_df, c(-200, 0))
+```

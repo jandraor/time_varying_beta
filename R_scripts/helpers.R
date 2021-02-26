@@ -26,3 +26,21 @@ calculate_time <- function(t_list) {
   t_obj <- t_list[[1]]
   (t_obj$toc - t_obj$tic) / 60
 }
+
+extract_mif_results <- function(mif_output) {
+  sapply(gs_obj$mf_results, function(x) class(x))-> class_vector
+  
+  valid_indexes <- which(class_vector == "mif2d_pomp")
+  
+  valid_results <- mif_output[valid_indexes]
+  
+  # needs to be improved
+  
+  mif_output <- c(valid_results[[1]], valid_results[[2]])
+  
+  for(i in 3:length(valid_results)) {
+    mif_output <- c(mif_output, valid_results[[i]])
+  }
+  
+  mif_output
+}
