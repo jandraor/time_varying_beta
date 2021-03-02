@@ -21,6 +21,8 @@ library(stringr)
 library(tictoc)
 library(tidyr)
 
+folder <- "./Saved_objects/Irish_data/SEI3R_CIR/weekly/"
+
 #===============================================================================
 # Data
 #===============================================================================
@@ -28,19 +30,9 @@ library(tidyr)
 source("./R_scripts/irish_data.R")
 source("./R_scripts/apple.R")
 
-irish_data <- get_irish_data()
-
-apple_data <- get_apple_data(start_date = "2020-02-29",
-                             end_date = "2020-05-17")
-
-driving_data <- filter(apple_data, transportation_type == "driving")
-first_val    <- driving_data[1, "index"] %>% as.numeric()
-
-driving_data <- driving_data %>%
-  mutate(index = index / first_val, time = row_number())
-
-raw_data <- driving_data$index
-imp      <- na_interpolation(raw_data)
+irish_data   <- get_irish_data()
+drv_data_obj <- get_driving_data()
+imp          <- drv_data_obj$imputed_data
 
 #===============================================================================
 # Weekly data
@@ -71,7 +63,7 @@ source("./R_scripts/local_search.R")
 ptb    <- rw.sd(P_0 = ivp(0.02), tau = 0.02, nu = 0.02, upsilon = 0.02, 
                 zeta = 0.02, alpha = 0.02)
 
-fn     <- "./Saved_objects/Irish_data/SEI3R_CIR/local_search_wkl.rds"
+fn     <- file.path(folder, "local_search_mdl2.rds")
 ls_obj <- local_search(pomp_mdl, params, ptb, fn, 292718669, 7)
 
 #===============================================================================
@@ -91,7 +83,7 @@ runif_design(
   nseq  = 300
 ) -> guesses
 
-fn     <- "./Saved_objects/Irish_data/SEI3R_CIR/Global_search_wkl.rds"
+fn     <- file.path(folder, "Global_search_mdl2.rds")
 seed   <- 435367905
 source("./R_scripts/global_search.R")
 gs_obj <- global_search(guesses, fixed_params, mf1, fn, seed, 7)
