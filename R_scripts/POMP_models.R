@@ -19,8 +19,8 @@ get_params <- function(mdl_id) {
                   sigma = sigma_val, eta = eta_val, kappa = kappa_val,
                   rho = rho_val)
   
-  if(mdl_id == "1") {
-    unknown_pars <- c(B_0 = B_guess, P_0 = P_guess)
+  if(mdl_id == "GBM_1") {
+    unknown_pars <- c(B_0 = B_guess, P_0 = P_guess, alpha = alpha_guess)
   }
   
   if(mdl_id == "GBM_2") {
@@ -90,7 +90,7 @@ get_POMP_model <- function(obs_df, params) {
       accumvars = "C",
       rmeasure = rmeas,
       dmeasure = dmeas,
-      partrans = parameter_trans(log   = c("B_0", "P_0")),
+      partrans = parameter_trans(log   = c("B_0", "P_0", "alpha")),
       cdir = ".", 
       cfile= "SEI3R_GBM"
     ) -> SEI3R_GBM

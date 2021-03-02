@@ -31,7 +31,7 @@ global_search <- function(guesses, fixed_params, mf1, fn, seed, n_cores) {
     
     toc(quiet = FALSE, log = TRUE)
     log.lst <- tic.log(format = FALSE)
-    results <- list(mf_results = mf_results, time = log.lst)
+    results <- list(mif_results = mf_results, time = log.lst)
     saveRDS(results, fn)
   } else {
     results <- readRDS(fn)  

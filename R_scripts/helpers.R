@@ -28,11 +28,11 @@ calculate_time <- function(t_list) {
 }
 
 extract_mif_results <- function(mif_output) {
-  sapply(gs_obj$mf_results, function(x) class(x))-> class_vector
+  sapply(mif_output$mif_results, function(x) class(x))-> class_vector
   
   valid_indexes <- which(class_vector == "mif2d_pomp")
   
-  valid_results <- mif_output[valid_indexes]
+  valid_results <- mif_output$mif_results[valid_indexes]
   
   # needs to be improved
   
@@ -43,4 +43,16 @@ extract_mif_results <- function(mif_output) {
   }
   
   mif_output
+}
+
+extract_ll_df <- function(ll_output) {
+  map_lgl(ll_output$ll_results, function(x) {
+    result_class <- class(x)
+    
+    "data.frame" %in% result_class
+  }) -> valid_indexes
+  
+  valid_results <- ll_output$ll_results[valid_indexes]
+  
+  do.call("rbind", valid_results)
 }

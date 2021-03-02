@@ -25,16 +25,25 @@ iter_filt_profile <- function(mf1, guesses, fixed_params, perturbations,
     tic.clearlog()
     tic()
     
-    foreach(guess = iter(guesses,"row"), .combine = c) %dopar% {
+    foreach(guess = iter(guesses,"row"), .combine = c,
+            .errorhandling = 'pass') %dopar% {
       library(dplyr)
       library(pomp)
+              
+      out <- tryCatch({
+        mf1 %>%
+          mif2(params = c(unlist(guess),fixed_params),
+               rw.sd = perturbations) %>%
+          mif2(Nmif = 100, cooling.fraction.50 = 0.3) -> mf
+        list(mf)
+      },
+      error = function(cond) {
+        error_list <- list(list(guess = unlist(guess),
+                                error = cond))
+        return(error_list)
+      })
       
-      mf1 %>%
-        mif2(params = c(unlist(guess),fixed_params),
-             rw.sd = perturbations) %>%
-        mif2(Nmif = 100, cooling.fraction.50 = 0.3) -> mf
-      
-
+      return(out)
     } -> mif_results
     toc(quiet = FALSE, log = TRUE)
     log.lst <- tic.log(format = FALSE)
