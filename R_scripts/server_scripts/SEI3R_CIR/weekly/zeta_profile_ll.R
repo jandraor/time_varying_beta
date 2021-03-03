@@ -1,3 +1,16 @@
+library(doParallel)
+library(doRNG)
+library(dplyr)
+library(imputeTS)
+library(lubridate)
+library(pomp)
+library(purrr)
+library(readr)
+library(readxl)
+library(stringr)
+library(tictoc)
+library(tidyr)
+
 folder <- "./Saved_objects/Irish_data/SEI3R_GBM/weekly"
 
 source("./R_scripts/helpers.R")
