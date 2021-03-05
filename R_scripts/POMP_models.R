@@ -97,7 +97,7 @@ get_POMP_model <- function(obs_df, params) {
   
 }
 
-pomp_SEI3R_GBM2 <- function(obs_df, params) {
+pomp_SEI3R_GBM2 <- function(obs_df, params, dt = 0.01) {
   Csnippet("
     y1  = rpois(C);  
     y2 = rnorm(B, tau);
@@ -138,7 +138,7 @@ pomp_SEI3R_GBM2 <- function(obs_df, params) {
     pomp(
       times = "time", t0 = 0,
       rinit = rinit,
-      rprocess = pomp::euler(SEI3R_GBM_step2, delta.t = 0.01),
+      rprocess = pomp::euler(SEI3R_GBM_step2, delta.t = dt),
       statenames = c("S", "E", "P","I", "R", "A", "C", "B"),
       paramnames = par_names,
       params = params,
