@@ -14,6 +14,23 @@ library(tidyr)
 
 folder <- "./Saved_objects/Irish_data/SEI3R_GBM/weekly/model_2"
 
+source("R_scripts/get_weekly_df.R")
+wkl_df <- get_weekly_df()
+
+#===============================================================================
+# Model setup
+#===============================================================================
+
+source("./R_scripts/POMP_models.R")
+
+par_obj  <- get_params("GBM_2")
+params   <- par_obj$all
+pomp_mdl <- pomp_SEI3R_GBM2(wkl_df, params, 1 / 128)
+
+#===============================================================================
+# Global search
+#===============================================================================
+
 fn     <- file.path(folder, "local_search_mdl2.rds")
 ls_obj <- readRDS(fn)
 

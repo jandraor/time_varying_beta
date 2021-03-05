@@ -1,9 +1,12 @@
 global_search <- function(guesses, fixed_params, mf1, fn, seed, n_cores) {
   
   if(!file.exists(fn)) {
+    message("...Starting global search...")
     
     registerDoParallel(cores = n_cores)
     registerDoRNG(seed)
+    
+    message(paste0("Number of working cores: "), getDoParWorkers())
     
     tic.clearlog()
     tic()
