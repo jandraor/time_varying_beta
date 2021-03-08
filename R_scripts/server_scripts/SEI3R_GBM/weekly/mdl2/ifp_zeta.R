@@ -50,15 +50,14 @@ profile_design(
   nprof = 15, type = "runif"
 ) -> guesses
 
-zeta_ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, alpha = 0.02)
-
-
-
 fn_ls  <- file.path(folder, "local_search_mdl2.rds")
 ls_obj <- readRDS(fn_ls)
 mf1    <- ls_obj$result[[1]]
 
-fn_ifp  <- file.path(folder, "ifp_zeta.rds" )
+source("./R_scripts/likelihood_funs.R")
+
+fn_ifp   <- file.path(folder, "ifp_zeta.rds" )
+zeta_ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, alpha = 0.02)
 
 ifp_obj <- iter_filt_profile(mf1 = mf1, 
                              guesses = guesses,
