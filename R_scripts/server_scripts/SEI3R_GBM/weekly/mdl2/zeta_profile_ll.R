@@ -34,6 +34,7 @@ pomp_mdl     <- pomp_SEI3R_GBM2(wkl_df, params, 1 / 128)
 fn_ifp                   <- file.path(folder, "ifp_zeta.rds" )
 ifp_obj                  <- readRDS(fn_ifp)
 
+source("./R_scripts/helpers.R")
 zeta_profile_mif_results <- extract_mif_results(ifp_obj)
 
 source("./R_scripts/likelihood_funs.R")
