@@ -28,11 +28,17 @@ calculate_time <- function(t_list) {
 }
 
 extract_mif_results <- function(mif_output) {
+  n_iter <- length(mif_output$mif_results)
+  
   sapply(mif_output$mif_results, function(x) class(x))-> class_vector
   
   valid_indexes <- which(class_vector == "mif2d_pomp")
   
   valid_results <- mif_output$mif_results[valid_indexes]
+  
+  n_valid <- length(valid_results)
+  
+  message(str_glue("{n_valid} out of {n_iter} are valid"))
   
   # needs to be improved
   
@@ -46,6 +52,8 @@ extract_mif_results <- function(mif_output) {
 }
 
 extract_ll_df <- function(ll_output) {
+  n_iter <- length(ll_output$ll_results)
+  
   map_lgl(ll_output$ll_results, function(x) {
     result_class <- class(x)
     
@@ -53,6 +61,10 @@ extract_ll_df <- function(ll_output) {
   }) -> valid_indexes
   
   valid_results <- ll_output$ll_results[valid_indexes]
+  
+  n_valid <- length(valid_results)
+  
+  message(str_glue("{n_valid} out of {n_iter} are valid"))
   
   do.call("rbind", valid_results)
 }
