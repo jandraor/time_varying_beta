@@ -39,13 +39,13 @@ source("./R_scripts/helpers.R")
 loglik_df <- extract_ll_df(ll_obj)
 
 loglik_df %>% 
-  filter(loglik > max(loglik)- 10, loglik.se < 2) %>%
+  filter(loglik > max(loglik)- 20, loglik.se < 2) %>%
   sapply(range) -> box
 
 set.seed(917477792)
 
 profile_design(
-  zeta  = seq(0.8, 1.40,length = 40),
+  zeta  = seq(0.8, 1.60,length = 40),
   lower = box[1, c("P_0" , "tau", "alpha")],
   upper = box[2, c("P_0", "tau", "alpha")],
   nprof = 15, type = "runif"
