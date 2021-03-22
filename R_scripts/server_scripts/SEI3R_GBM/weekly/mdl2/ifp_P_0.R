@@ -33,7 +33,7 @@ profile_design(
 source("./R_scripts/likelihood_funs.R")
 P_0_ptb <- rw.sd(zeta = 0.02, tau = 0.02, alpha = 0.02)
 
-fn_ifp     <- file.path(folder, "ifp_P_0.rds" )
+fn_ifp     <- file.path(folder, "ifp_P_0.rds")
 
 ifp_obj <- iter_filt_profile(mf1 = mf1, 
                              guesses = guesses,
