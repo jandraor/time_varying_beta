@@ -1,4 +1,4 @@
-estimate_r <- function(beta_t, omega = 0.7, gamma = 1/3, eta = 1 / 2.1, 
+estimate_r <- function(beta_t, omega = 0.73, gamma = 1/2.9, eta = 1 / 2.1, 
                        mu = 0.5, kappa = 1 / 5) {
   
   # Symptomatic contribution to R
