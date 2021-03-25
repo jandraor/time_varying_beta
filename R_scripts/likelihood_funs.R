@@ -64,6 +64,8 @@ mif_ll <- function(mf_list, Np = 100000, seed, n_cores, filename) {
     
     message(paste0("Number of working cores: "), getDoParWorkers())
     
+    message(paste0("Starting at ", date()))
+    
     tic.clearlog()
     tic()
 

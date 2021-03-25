@@ -149,3 +149,32 @@ mif_traces <- function(traces_df, unknown_pars) {
     facet_wrap(~variable,scales = "free_y", labeller = label_parsed)
 }
 
+raw_likelihood <- function(all_df, var_x) {
+  all_df %>%
+    filter(type == "result") %>%
+    ggplot(aes(x = !!ensym(var_x), y = loglik))+
+    geom_point()+
+    theme_pubr() +
+    geom_smooth(se = FALSE) +
+    labs(
+      x = parse(text = var_x),
+      title = "Raw profile likelihood"
+    )
+}
+
+profile_plot <- function(profile_df, prof_var, ci_cutoff) {
+  profile_df %>%
+    filter(is.finite(loglik)) %>%
+    group_by(round(!!ensym(prof_var),5)) %>%
+    filter(rank(-loglik)< 3) %>%
+    ungroup() %>%
+    ggplot(aes(x = !!ensym(prof_var),y = loglik))+
+    geom_point()+
+    geom_smooth(method = "loess", se = FALSE)+
+    geom_hline(color = "red", yintercept = ci_cutoff, linetype = "dashed")+
+    lims(y=maxloglik-c(5,0))+
+    labs(y = "Log-likelihood", x = parse(text = prof_var)) +
+    theme_pubr()
+}
+
+
