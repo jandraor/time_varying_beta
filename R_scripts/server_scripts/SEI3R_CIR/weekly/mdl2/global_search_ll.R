@@ -1,5 +1,7 @@
 source("./R_scripts/model_setup_CIR.R")
 
+source("./R_scripts/helpers.R")
+
 gs_obj      <- readRDS(file.path(folder, "Global_search_mdl2.rds"))
 mifs_global <- extract_mif_results(gs_obj)
 
