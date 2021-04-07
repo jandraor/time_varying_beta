@@ -76,7 +76,7 @@ get_POMP_model <- function(obs_df, params) {
     R+= (gamma*I + kappa * A)*dt;
     A+= ((1-omega) * sigma * E - kappa * A) * dt;
     B+= alpha*B*dW;
-    C+= (rho*eta*P)*dt;
+    C+= (eta*P)*dt;
   ") -> SEI3R_GBM_step
   
   par_names <- names(params)
@@ -201,8 +201,8 @@ pomp_SEI3R_CIR <- function(obs_df, pars, dt = 0.01) {
       accumvars = "C",
       rmeasure = rmeas,
       dmeasure = dmeas,
-      partrans = parameter_trans(log   = c("zeta", "P_0", "tau", "nu", 
-                                           "upsilon", "alpha")),
+      partrans = parameter_trans(log   = c("zeta", "P_0", "tau", "alpha"),
+                                 logit = c("upsilon", "nu")),
       obsnames = c("y1", "y2"),
       cdir = ".", 
       cfile= "SEI3R_CIR"
