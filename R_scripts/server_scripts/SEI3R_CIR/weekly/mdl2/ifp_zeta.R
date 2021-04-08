@@ -10,6 +10,8 @@ fn        <- file.path(folder, "Global_search_mdl2_ll.rds" )
 ll_obj    <- readRDS(fn) 
 loglik_df <- extract_ll_df(ll_obj)
 
+source("./R_scripts/likelihood_funs.R")
+
 loglik_df %>% 
   filter(loglik > max(loglik)- 20, loglik.se < 2) %>%
   sapply(range) -> box
