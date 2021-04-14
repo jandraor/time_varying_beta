@@ -12,7 +12,7 @@ library(stringr)
 library(tictoc)
 library(tidyr)
 
-folder <- "./Saved_objects/Irish_data/SEI3R_GBM/weekly/model_2"
+folder <- "./Saved_objects/Irish_data/SEI3R_GBM/weekly/mdl_2"
 
 source("R_scripts/get_weekly_df.R")
 wkl_df <- get_weekly_df()
