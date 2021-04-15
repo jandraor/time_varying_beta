@@ -25,6 +25,11 @@ get_driving_data <- function() {
   raw_data     <- driving_data$index
   imp          <- na_interpolation(raw_data)
   
+  df <- data.frame(date = seq(ymd('2020-02-29'), ymd('2020-05-17'), "day"),
+                   time = 1:length(imp),
+                   y2   = imp)
+  
   list(raw_data = raw_data,
-       imputed_data = imp)
+       imputed_data = imp,
+       df = df)
 }

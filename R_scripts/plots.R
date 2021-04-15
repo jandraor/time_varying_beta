@@ -1,3 +1,4 @@
+library(extraDistr)
 library(GGally)
 library(ggplot2)
 library(ggpubr)
@@ -118,6 +119,26 @@ imputed_driving_data <- function(raw_data, imputed_data) {
     theme(plot.caption = element_text(colour = "grey70"))
 }
 
+plot_daily_data <- function(irish_data, drv_df) {
+  
+  g1 <- ggplot(irish_data, aes(x = date, y = y)) +
+    geom_point(colour = "steelblue", alpha = 0.8) +
+    stat_smooth(geom = 'line', alpha = 0.5, se = FALSE, span = 0.25,
+                colour = "grey50", size = 1) +
+    labs(y = "Incidence [new cases per week]",
+         x = "Week of Lab specimen collection") +
+    theme_pubr()
+  
+  g2 <- ggplot(drv_df, aes(x = date, y = y2)) +
+    geom_point(colour = "steelblue", alpha = 0.8) +
+    stat_smooth(geom = 'line', alpha = 0.5, se = FALSE, 
+                colour = "grey50", size = 1) +
+    labs(y = "Mobility index", x = "Date") +
+    theme_pubr()
+  
+  g1 / g2
+}
+
 loglik_traces <- function(traces_df, lims) {
   traces_df %>% filter(variable == "loglik") %>% 
     ggplot(aes(x = iteration,y = value,group = L1))+
@@ -150,6 +171,9 @@ mif_traces <- function(traces_df, unknown_pars) {
 }
 
 raw_likelihood <- function(all_df, var_x) {
+  
+  var_x <- as.character(var_x)
+  
   all_df %>%
     filter(type == "result") %>%
     ggplot(aes(x = !!ensym(var_x), y = loglik))+
@@ -163,6 +187,9 @@ raw_likelihood <- function(all_df, var_x) {
 }
 
 profile_plot <- function(profile_df, prof_var, ci_cutoff) {
+  
+  prof_var <- as.character(prof_var)
+  
   profile_df %>%
     filter(is.finite(loglik)) %>%
     group_by(round(!!ensym(prof_var),5)) %>%
@@ -172,9 +199,80 @@ profile_plot <- function(profile_df, prof_var, ci_cutoff) {
     geom_point()+
     geom_smooth(method = "loess", se = FALSE)+
     geom_hline(color = "red", yintercept = ci_cutoff, linetype = "dashed")+
-    lims(y=maxloglik-c(5,0))+
+    lims(y = maxloglik - c(5,0))+
     labs(y = "Log-likelihood", x = parse(text = prof_var)) +
     theme_pubr()
 }
+
+plot_guesses <- function(guesses_df) {
+  aes_points <- list(continuous = wrap("points", alpha = 0.5, size = 1,
+                                       colour = "steelblue"))
+  
+  guesses_df <- rename(guesses_df, `P(0)` = `P_0`)
+  
+  ggpairs(guesses_df, 
+          upper = aes_points,
+          lower = aes_points,
+          diag  = list(continuous =  'blankDiag'),
+          labeller = label_parsed) +
+    theme_pubr() +
+    theme(axis.text = element_text(size = 6))
+}
+
+plot_MCAP <- function(prof_ll, var_name, span = 0.75){
+  
+  var_name <- as.character(var_name)
+  
+  ggplot(prof_ll, aes(x = !!ensym(var_name), y = loglik)) +
+    geom_point(alpha = 0.7, colour = "grey50") +
+    geom_smooth(span = span, se = FALSE) +
+    geom_hline(yintercept = cut_off_smth, colour = "red", linetype = "dotted") +
+    labs(y = "Log-likelihood", x = parse(text = var_name)) +
+    theme_pubr()
+}
+
+plot_priors <- function(){
+  g1 <- ggplot(NULL, aes(c(0, 10))) + 
+    geom_area(stat = "function", fun = dlnorm, fill = "grey95", 
+              colour = "grey60") +
+    scale_x_continuous(breaks = c(0, 5, 10)) +
+    theme_pubr() +
+    labs(y = "Probability density",
+         x = bquote(zeta)) +
+    theme(axis.line.y = element_blank(),
+          axis.ticks = element_blank(),
+          axis.text.y = element_blank())
+  
+  g2 <- g1 +
+    labs(x = "P(0)", y = "")
+  
+  g3   <- ggplot(NULL, aes(c(0, 1))) + 
+    geom_area(stat = "function", fun = dbeta, fill = "grey95", 
+              colour = "grey60", args = list(shape1 = 2, shape2 = 2)) +  
+    scale_x_continuous(breaks = c(0, 0.5, 1)) +
+    theme_pubr() +
+    labs(y = "Probability density",
+         x = bquote(nu)) +
+    theme(axis.line.y = element_blank(),
+          axis.ticks = element_blank(),
+          axis.text.y = element_blank())
+  
+  g4 <- g3 + labs(x = bquote(upsilon), y = "")
+  
+  g5 <- ggplot(NULL, aes(c(0, 10))) + 
+    geom_area(stat = "function", fun = dhcauchy, fill = "grey95", 
+              colour = "grey60", args = list(sigma = 1)) +  
+    scale_x_continuous(breaks = c(0, 5, 10)) +
+    theme_pubr() +
+    labs(y = "",
+         x = bquote(tau)) +
+    theme(axis.line.y = element_blank(),
+          axis.ticks = element_blank(),
+          axis.text.y = element_blank())
+  
+  
+  (g1 + g2) / (g3 + g4 + g5)
+}
+
 
 
