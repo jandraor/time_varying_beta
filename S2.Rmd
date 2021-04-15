@@ -1,0 +1,266 @@
+---
+title: "S2 Appendix"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+library(cmdstanr)
+library(dplyr)
+library(extraDistr)
+library(imputeTS)
+library(lubridate)
+library(purrr)
+library(readr)
+library(readsdr)
+library(readxl)
+library(rstan)
+library(stringr)
+library(tidyr)
+```
+
+# Data
+
+```{r}
+source("./R_scripts/irish_data.R")
+irish_data   <- get_irish_data()
+
+source("./R_scripts/apple.R")
+drv_data_obj <- get_driving_data()
+```
+
+```{r}
+source("./R_scripts/plots.R")
+
+plot_daily_data(irish_data, drv_data_obj$df)
+```
+
+
+```{r}
+mdl_path <- "./models/SEI3R_4th_order.stmx"
+mdl      <- read_xmile(mdl_path)
+```
+
+# Priors
+
+* $\zeta\sim lognormal(0, 1)$
+* $P(0) \sim lognormal(0, 1)$
+* $\nu \sim beta(2, 2)$
+* $\upsilon \sim beta(2, 2)$
+* $\tau \sim \text{half-Cauchy}(0, 1)$
+
+```{r}
+source("./R_scripts/plots.R")
+plot_priors()
+```
+
+
+# Prior predictive checks
+
+```{r}
+fn     <- "./Saved_objects/Irish_data/SEI3R_SMTH4/mdl_1/prior_fit.rds"
+n_sims <- 5000
+
+if(!file.exists(fn)) {
+  set.seed(4132021)
+
+
+N <- 4937796
+
+
+zeta_sims    <- rlnorm(n_sims)
+P_sims       <- rlnorm(n_sims)
+nu_sims      <- rbeta(n_sims, 2, 2)
+upsilon_sims <- rbeta(n_sims, 2, 2)
+
+stocks_df <- data.frame(P = P_sims,
+                        S = N - P_sims)
+
+consts_df <- data.frame(zeta    = zeta_sims,
+                        nu      = nu_sims,
+                        upsilon = upsilon_sims)
+
+prior_fit <- sd_sensitivity_run(mdl$deSolve_components, 
+                                start_time = 0,
+                                stop_time = nrow(irish_data),
+                                integ_method = "rk4",
+                                timestep = 1 / 64,
+                                stocks_df = stocks_df,
+                                consts_df = consts_df) %>% 
+  filter(time %in% 0:nrow(irish_data))
+
+saveRDS(prior_fit, fn)
+} else {
+  prior_fit <- readRDS(fn)
+}
+
+
+```
+
+
+```{r}
+source("./R_scripts/helpers.R")
+
+set.seed(41521)
+
+split_df <- split(prior_fit, prior_fit$iter)
+
+prior_incidence <- imap_dfr(split_df, function(df, i) {
+  discrete_net_change(df, cumulative_var = "C") %>% 
+    mutate(iter = i)
+}) %>% mutate(measured_value = rpois(nrow(.), value))
+
+filtered_pi <- prior_incidence %>% group_by(iter) %>% 
+  filter(max(value) < 2000)
+```
+
+```{r}
+g1 <- ggplot(filtered_pi, aes(x = time, y = value)) +
+  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
+  geom_point(data = irish_data, aes(y = y), colour = "steelblue") +
+  labs(subtitle = "Predicted true incidence") +
+  theme_pubclean()
+
+g2 <- ggplot(filtered_pi, aes(x = time, y = measured_value)) +
+  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
+  geom_point(data = irish_data, aes(y = y), colour = "steelblue") +
+  labs(subtitle = "Predicted measured incidence") +
+  theme_pubclean()
+```
+
+```{r}
+set.seed(314)
+
+tau_sims <- rhcauchy(n_sims, 1)
+split_df <- split(prior_fit, prior_fit$iter)
+
+map_df(1:n_sims, function(i) {
+  df      <- split_df[[i]]
+  tau_val <- tau_sims[[i]]
+  
+  df %>% mutate(Z_measured = rnorm(nrow(.), tau_val))
+}) %>% select(time, iter, Z, Z_measured) %>% 
+  filter(time !=0) -> Z_df
+```
+
+```{r}
+g3 <- ggplot(Z_df, aes(x = time, y = Z)) +
+  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
+  geom_point(data = drv_data_obj$df, aes(y = y2), colour = "steelblue") +
+  labs(subtitle = "Predicted true mobility") +
+  theme_pubclean()
+
+Z_df %>% group_by(iter) %>% 
+  filter(max(Z_measured) < 15) %>% ungroup() -> filtered_Z
+
+ids <- unique(filtered_Z$iter)
+
+g4 <- ggplot(filtered_Z %>% filter(iter %in% ids[1:25]) , aes(x = time, y = Z_measured)) +
+  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
+  geom_point(data = drv_data_obj$df, aes(y = y2), colour = "steelblue") +
+  scale_y_continuous(limits = c(-5, 10)) +
+  labs(subtitle = "Predicted measured mobility") +
+  theme_pubclean()
+
+
+```
+
+```{r}
+(g1 + g2) / (g3 + g4)
+```
+
+```{r}
+ODE_fn    <- "SEI3R"
+consts    <- sd_constants(mdl)
+stan_fun  <- stan_ode_function(mdl_path, ODE_fn, 
+                               pars = consts$name[c(10, 9, 8)])
+fun_exe_line <- str_glue("  o = ode_rk45({ODE_fn}, y0, t0, ts, params);") 
+
+stan_data <- stan_data(c("y1", "y2"), type = c("int", "real"), inits = FALSE)
+
+stan_params <- paste(
+  "parameters {",
+  "  real<lower = 0>            zeta;",
+  "  real<lower = 0>            tau;",
+  "  real<lower = 0, upper = 1> nu;",
+  "  real<lower = 0, upper = 1> upsilon;",
+  "  real<lower = 0>            P_0;",
+"}", sep = "\n")
+
+stan_tp <- paste(
+  "transformed parameters{",
+  "  vector[n_difeq] o[n_obs]; // Output from the ODE solver",
+  "  real y1_hat[n_obs];",
+  "  real y2_hat[n_obs];",
+  "  vector[n_difeq] y0;",
+  "  real params[n_params];",
+  "  y0[1]  = 1;",
+  "  y0[2]  = 1;",
+  "  y0[3]  = 1;",
+  "  y0[4]  = 1;",
+  "  y0[5]  = 4937796 - P_0;",
+  "  y0[6]  = 0;",
+  "  y0[7]  = P_0;",
+  "  y0[8]  = 0;",
+  "  y0[9]  = 0;",
+  "  y0[10] = 0;",
+  "  y0[11] = 0;",
+  "  params[1] = zeta;",
+  "  params[2] = upsilon;",
+  "  params[3] = nu;",
+  fun_exe_line,
+  "  y1_hat[1] =  o[1, 11]  - y0[11];",
+  "  for (i in 1:n_obs-1) {",
+  "    y1_hat[i + 1] = o[i + 1, 11] - o[i, 11] + 1e-5;",
+  "    y2_hat[i] = o[i, 1];",
+  "  }",
+  "  y2_hat[n_obs] = o[n_obs, 1];",
+  "}", sep = "\n")
+
+stan_model <- paste(
+  "model {",
+  "  beta    ~ lognormal(0, 1);",
+  "  upsilon ~ beta(2, 2);",
+  "  nu      ~ beta(2, 2);",
+  "  I0      ~ lognormal(0, 1);",
+  "  tau     ~ cauchy(0, 1);",
+  "  y1      ~ poisson(y1_hat);",
+  "  y2      ~ normal(y2_hat, tau);",
+  "}",
+  sep = "\n")
+
+stan_text   <- paste(stan_fun, stan_data, stan_params,
+                       stan_tp, stan_model, sep = "\n")
+
+stan_filepath <- "./Stan_files/SEI3R_4th_smth.stan"
+create_stan_file(stan_text, stan_filepath)
+```
+
+```{r fit_norm, results = 'hide'}
+stan_d <- list(n_obs    = nrow(irish_data),
+               y1       = irish_data$y,
+               y2       = drv_data_obj$df$y2,
+               n_params = 3,
+               n_difeq  = 11,
+               t0       = 0,
+               ts       = 1:nrow(irish_data))
+               
+mod <- cmdstan_model(stan_filepath)
+fit <- mod$sample(data            = stan_d,
+                  seed            = 5536,
+                  chains          = 4,
+                  parallel_chains = 4,
+                  iter_warmup     = 1000,
+                  iter_sampling   = 1000,
+                  refresh         = 5,
+                  save_warmup     = TRUE)
+
+sf_4th <- rstan::read_stan_csv(fit$output_files())
+```
+
+
+
+# Inference
+
+# Posterior predictive checks
