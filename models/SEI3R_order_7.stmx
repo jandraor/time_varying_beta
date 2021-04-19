@@ -2,7 +2,7 @@
 <xmile version="1.0" xmlns="http://docs.oasis-open.org/xmile/ns/XMILE/v1.0" xmlns:isee="http://iseesystems.com/XMILE">
 	<header>
 		<smile version="1.0" namespace="std, isee"/>
-		<name>SEI3R_order_6</name>
+		<name>SEI3R_order_7</name>
 		<uuid>91996083-925b-4a0b-a5d0-75ad061a141d</uuid>
 		<vendor>isee systems, inc.</vendor>
 		<product version="2.0" isee:build_number="2190" isee:saved_by_v1="true" lang="en">Stella Architect</product>
@@ -94,7 +94,7 @@
 				<eqn>1 / 5</eqn>
 			</aux>
 			<aux name="Z">
-				<eqn>SMTHN(upsilon,  inv_nu,  6, 1)</eqn>
+				<eqn>SMTHN(upsilon,  inv_nu,  7, 1)</eqn>
 			</aux>
 			<aux name="upsilon">
 				<eqn>0.3</eqn>
