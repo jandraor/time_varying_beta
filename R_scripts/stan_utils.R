@@ -51,3 +51,9 @@ construct_incidence_df <- function(posterior_df) {
   extract_timeseries_var("y1_hat", posterior_df) %>% 
     mutate(order = dly_o)
 }
+
+mase_per_iter <- function(sim_df, i, data_vector) {
+  sim_df %>% group_by(iter) %>% 
+    summarise(mase = mase(data_vector, value)) %>% 
+    mutate(order = i)
+}
