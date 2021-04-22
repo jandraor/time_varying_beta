@@ -45,10 +45,10 @@ loglik_df %>%
 set.seed(917477792)
 
 profile_design(
-  zeta  = seq(0.8, 1.60,length = 40),
+  zeta  = seq(0.4, 2,length = 40),
   lower = box[1, c("P_0" , "tau", "alpha")],
   upper = box[2, c("P_0", "tau", "alpha")],
-  nprof = 15, type = "runif"
+  nprof = 20, type = "sobol"
 ) -> guesses
 
 fn_ls  <- file.path(folder, "local_search_mdl2.rds")
