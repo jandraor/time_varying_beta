@@ -1,6 +1,10 @@
 ---
 title: "S2 Appendix"
-output: pdf_document
+output:
+  pdf_document: 
+    number_sections: true
+header-includes:
+  - \usepackage{booktabs}
 ---
 
 ```{r setup, include=FALSE}
@@ -10,7 +14,9 @@ library(cmdstanr)
 library(dplyr)
 library(extraDistr)
 library(imputeTS)
+library(kableExtra)
 library(lubridate)
+library(Metrics)
 library(purrr)
 library(readr)
 library(readsdr)
@@ -18,6 +24,8 @@ library(readxl)
 library(rstan)
 library(stringr)
 library(tidyr)
+
+folder <- "./Saved_objects/Irish_data/SEI3R_SMTH/"
 ```
 
 # Data
@@ -30,237 +38,740 @@ source("./R_scripts/apple.R")
 drv_data_obj <- get_driving_data()
 ```
 
-```{r}
+```{r, fig.height = 3}
 source("./R_scripts/plots.R")
 
 plot_daily_data(irish_data, drv_data_obj$df)
 ```
 
 
-```{r}
-mdl_path <- "./models/SEI3R_4th_order.stmx"
-mdl      <- read_xmile(mdl_path)
-```
-
 # Priors
 
-* $\zeta\sim lognormal(0, 1)$
-* $P(0) \sim lognormal(0, 1)$
-* $\nu \sim beta(2, 2)$
-* $\upsilon \sim beta(2, 2)$
-* $\tau \sim \text{half-Cauchy}(0, 1)$
-
-```{r}
+```{r, fig.height = 3}
 source("./R_scripts/plots.R")
 plot_priors()
 ```
 
-
-# Prior predictive checks
-
-```{r}
-fn     <- "./Saved_objects/Irish_data/SEI3R_SMTH4/mdl_1/prior_fit.rds"
-n_sims <- 5000
-
-if(!file.exists(fn)) {
-  set.seed(4132021)
-
-
-N <- 4937796
-
-
-zeta_sims    <- rlnorm(n_sims)
-P_sims       <- rlnorm(n_sims)
-nu_sims      <- rbeta(n_sims, 2, 2)
-upsilon_sims <- rbeta(n_sims, 2, 2)
-
-stocks_df <- data.frame(P = P_sims,
-                        S = N - P_sims)
-
-consts_df <- data.frame(zeta    = zeta_sims,
-                        nu      = nu_sims,
-                        upsilon = upsilon_sims)
-
-prior_fit <- sd_sensitivity_run(mdl$deSolve_components, 
-                                start_time = 0,
-                                stop_time = nrow(irish_data),
-                                integ_method = "rk4",
-                                timestep = 1 / 64,
-                                stocks_df = stocks_df,
-                                consts_df = consts_df) %>% 
-  filter(time %in% 0:nrow(irish_data))
-
-saveRDS(prior_fit, fn)
-} else {
-  prior_fit <- readRDS(fn)
-}
-
-
-```
-
-
-```{r}
-source("./R_scripts/helpers.R")
-
-set.seed(41521)
-
-split_df <- split(prior_fit, prior_fit$iter)
-
-prior_incidence <- imap_dfr(split_df, function(df, i) {
-  discrete_net_change(df, cumulative_var = "C") %>% 
-    mutate(iter = i)
-}) %>% mutate(measured_value = rpois(nrow(.), value))
-
-filtered_pi <- prior_incidence %>% group_by(iter) %>% 
-  filter(max(value) < 2000)
-```
-
-```{r}
-g1 <- ggplot(filtered_pi, aes(x = time, y = value)) +
-  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
-  geom_point(data = irish_data, aes(y = y), colour = "steelblue") +
-  labs(subtitle = "Predicted true incidence") +
-  theme_pubclean()
-
-g2 <- ggplot(filtered_pi, aes(x = time, y = measured_value)) +
-  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
-  geom_point(data = irish_data, aes(y = y), colour = "steelblue") +
-  labs(subtitle = "Predicted measured incidence") +
-  theme_pubclean()
-```
-
-```{r}
-set.seed(314)
-
-tau_sims <- rhcauchy(n_sims, 1)
-split_df <- split(prior_fit, prior_fit$iter)
-
-map_df(1:n_sims, function(i) {
-  df      <- split_df[[i]]
-  tau_val <- tau_sims[[i]]
-  
-  df %>% mutate(Z_measured = rnorm(nrow(.), tau_val))
-}) %>% select(time, iter, Z, Z_measured) %>% 
-  filter(time !=0) -> Z_df
-```
-
-```{r}
-g3 <- ggplot(Z_df, aes(x = time, y = Z)) +
-  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
-  geom_point(data = drv_data_obj$df, aes(y = y2), colour = "steelblue") +
-  labs(subtitle = "Predicted true mobility") +
-  theme_pubclean()
-
-Z_df %>% group_by(iter) %>% 
-  filter(max(Z_measured) < 15) %>% ungroup() -> filtered_Z
-
-ids <- unique(filtered_Z$iter)
-
-g4 <- ggplot(filtered_Z %>% filter(iter %in% ids[1:25]) , aes(x = time, y = Z_measured)) +
-  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
-  geom_point(data = drv_data_obj$df, aes(y = y2), colour = "steelblue") +
-  scale_y_continuous(limits = c(-5, 10)) +
-  labs(subtitle = "Predicted measured mobility") +
-  theme_pubclean()
-
-
-```
-
-```{r}
-(g1 + g2) / (g3 + g4)
-```
-
-```{r}
-ODE_fn    <- "SEI3R"
-consts    <- sd_constants(mdl)
-stan_fun  <- stan_ode_function(mdl_path, ODE_fn, 
-                               pars = consts$name[c(10, 9, 8)])
-fun_exe_line <- str_glue("  o = ode_rk45({ODE_fn}, y0, t0, ts, params);") 
-
-stan_data <- stan_data(c("y1", "y2"), type = c("int", "real"), inits = FALSE)
-
-stan_params <- paste(
-  "parameters {",
-  "  real<lower = 0>            zeta;",
-  "  real<lower = 0>            tau;",
-  "  real<lower = 0, upper = 1> nu;",
-  "  real<lower = 0, upper = 1> upsilon;",
-  "  real<lower = 0>            P_0;",
-"}", sep = "\n")
-
-stan_tp <- paste(
-  "transformed parameters{",
-  "  vector[n_difeq] o[n_obs]; // Output from the ODE solver",
-  "  real y1_hat[n_obs];",
-  "  real y2_hat[n_obs];",
-  "  vector[n_difeq] y0;",
-  "  real params[n_params];",
-  "  y0[1]  = 1;",
-  "  y0[2]  = 1;",
-  "  y0[3]  = 1;",
-  "  y0[4]  = 1;",
-  "  y0[5]  = 4937796 - P_0;",
-  "  y0[6]  = 0;",
-  "  y0[7]  = P_0;",
-  "  y0[8]  = 0;",
-  "  y0[9]  = 0;",
-  "  y0[10] = 0;",
-  "  y0[11] = 0;",
-  "  params[1] = zeta;",
-  "  params[2] = upsilon;",
-  "  params[3] = nu;",
-  fun_exe_line,
-  "  y1_hat[1] =  o[1, 11]  - y0[11];",
-  "  for (i in 1:n_obs-1) {",
-  "    y1_hat[i + 1] = o[i + 1, 11] - o[i, 11] + 1e-5;",
-  "    y2_hat[i] = o[i, 1];",
-  "  }",
-  "  y2_hat[n_obs] = o[n_obs, 1];",
-  "}", sep = "\n")
-
-stan_model <- paste(
-  "model {",
-  "  beta    ~ lognormal(0, 1);",
-  "  upsilon ~ beta(2, 2);",
-  "  nu      ~ beta(2, 2);",
-  "  I0      ~ lognormal(0, 1);",
-  "  tau     ~ cauchy(0, 1);",
-  "  y1      ~ poisson(y1_hat);",
-  "  y2      ~ normal(y2_hat, tau);",
-  "}",
-  sep = "\n")
-
-stan_text   <- paste(stan_fun, stan_data, stan_params,
-                       stan_tp, stan_model, sep = "\n")
-
-stan_filepath <- "./Stan_files/SEI3R_4th_smth.stan"
-create_stan_file(stan_text, stan_filepath)
-```
-
-```{r fit_norm, results = 'hide'}
-stan_d <- list(n_obs    = nrow(irish_data),
-               y1       = irish_data$y,
-               y2       = drv_data_obj$df$y2,
-               n_params = 3,
-               n_difeq  = 11,
-               t0       = 0,
-               ts       = 1:nrow(irish_data))
-               
-mod <- cmdstan_model(stan_filepath)
-fit <- mod$sample(data            = stan_d,
-                  seed            = 5536,
-                  chains          = 4,
-                  parallel_chains = 4,
-                  iter_warmup     = 1000,
-                  iter_sampling   = 1000,
-                  refresh         = 5,
-                  save_warmup     = TRUE)
-
-sf_4th <- rstan::read_stan_csv(fit$output_files())
-```
-
-
-
 # Inference
 
-# Posterior predictive checks
+```{r inference_lists}
+source("./R_scripts/stan_utils.R")
+source("./R_scripts/write_SEI3R_model.R")
+n_orders            <- 9
+posterior_list      <- vector("list", n_orders)
+sim_incidences_list <- vector("list", n_orders)
+Z_list              <- vector("list", n_orders)
+```
+
+
+## 1st order delay
+
+```{r}
+dly_o <- 1 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_1}
+fn <- str_glue("./Saved_objects/Irish_data/SEI3R_SMTH/stan_fit_order_{dly_o}.rds")
+
+stan_d <- list(n_obs    = nrow(irish_data),
+               y1       = irish_data$y,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(irish_data))
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 931918239,
+                    warmup      = 4000,
+                    sampling    = 2000,
+                    adapt_delta = 0.90,
+                    step_size   = 0.0001) # default
+
+sf <- run_stan_file(fn, fit_options = fit_options, stan_path)
+```
+
+### Traceplots
+
+```{r, fig.height = 3.5}
+traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+```
+
+## 2nd order delay
+
+```{r}
+dly_o <- 2 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_2}
+fn <- str_glue("./Saved_objects/Irish_data/SEI3R_SMTH/stan_fit_order_{dly_o}.rds")
+
+stan_d <- list(n_obs    = nrow(irish_data),
+               y1       = irish_data$y,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(irish_data))
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 693132317,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    adapt_delta = 0.80, # default
+                    step_size   = 0.001) 
+
+sf <- run_stan_file(fn, fit_options = fit_options, stan_path)
+```
+
+### Traceplots
+
+```{r, fig.height = 3.5}
+traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+```
+
+## 3rd order delay
+
+```{r}
+dly_o <- 3 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- "./Stan_files/SEI3R_3_smth.stan"
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_3}
+fn <- str_glue("./Saved_objects/Irish_data/SEI3R_SMTH{dly_o}/stan_fit.rds")
+
+stan_d <- list(n_obs    = nrow(irish_data),
+               y1       = irish_data$y,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(irish_data))
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 477626707,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    step_size   = 0.001,
+                    adapt_delta = 0.8) # default
+
+sf <- run_stan_file(fn, fit_options = fit_options, stan_path)
+```
+
+### Traceplots
+
+```{r, fig.height = 3.5}
+traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+```
+
+
+## 4th order delay
+
+```{r}
+dly_o <- 4 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_4}
+fn <- str_glue("./Saved_objects/Irish_data/SEI3R_SMTH{dly_o}/stan_fit.rds")
+
+stan_d <- list(n_obs    = nrow(irish_data),
+               y1       = irish_data$y,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(irish_data))
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 986614638,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    step_size   = 0.001,
+                    adapt_delta = 0.8) # default
+
+sf <- run_stan_file(fn, fit_options = fit_options, stan_path)
+```
+
+### Traceplots
+
+```{r, fig.height = 3.5}
+traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+```
+
+
+## 5th order delay
+
+```{r}
+dly_o <- 5 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_5}
+fn <- str_glue("./Saved_objects/Irish_data/SEI3R_SMTH{dly_o}/stan_fit.rds")
+
+stan_d <- list(n_obs    = nrow(irish_data),
+               y1       = irish_data$y,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(irish_data))
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 549943389,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    step_size   = 0.001,
+                    adapt_delta = 0.8) # default
+
+sf <- run_stan_file(fn, fit_options = fit_options, stan_path)
+```
+
+### Traceplots
+
+```{r, fig.height = 3.5}
+traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+S_df                         <- extract_timeseries_stock("S", posterior_df,
+                                                         stocks, "o")
+```
+
+
+## 6th order delay
+
+```{r}
+dly_o <- 6 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_6}
+fn <- str_glue("./Saved_objects/Irish_data/SEI3R_SMTH/stan_fit_order_{dly_o}.rds")
+
+stan_d <- list(n_obs    = nrow(irish_data),
+               y1       = irish_data$y,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(irish_data))
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 846206826,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    adapt_delta = 0.90, # default
+                    step_size   = 0.001) 
+
+sf <- run_stan_file(fn, fit_options = fit_options, stan_path)
+```
+
+### Traceplots
+
+```{r, fig.height = 3.5}
+traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+```
+
+## 7th order delay
+
+```{r}
+dly_o <- 7 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_7}
+fn <- str_glue("./Saved_objects/Irish_data/SEI3R_SMTH/stan_fit_order_{dly_o}.rds")
+
+stan_d <- list(n_obs    = nrow(irish_data),
+               y1       = irish_data$y,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(irish_data))
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 373573480,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    adapt_delta = 0.80, # default
+                    step_size   = 0.001) 
+
+sf <- run_stan_file(fn, fit_options = fit_options, stan_path)
+```
+
+### Traceplots
+
+```{r, fig.height = 3.5}
+traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+```
+
+## 8th order delay
+
+```{r}
+dly_o <- 8 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_8}
+fn <- str_glue("./Saved_objects/Irish_data/SEI3R_SMTH/stan_fit_order_{dly_o}.rds")
+
+stan_d <- list(n_obs    = nrow(irish_data),
+               y1       = irish_data$y,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(irish_data))
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 107900538,
+                    warmup      = 4000,
+                    sampling    = 2000,
+                    adapt_delta = 0.80, # default
+                    step_size   = 0.001) 
+
+sf <- run_stan_file(fn, fit_options = fit_options, stan_path)
+```
+
+```{r, fig.height = 3.5}
+traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+```
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+```
+
+## 9th order delay
+
+```{r}
+dly_o <- 9 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_9}
+fn <- str_glue("./Saved_objects/Irish_data/SEI3R_SMTH/stan_fit_order_{dly_o}.rds")
+
+stan_d <- list(n_obs    = nrow(irish_data),
+               y1       = irish_data$y,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(irish_data))
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 790975884,
+                    warmup      = 4000,
+                    sampling    = 2000,
+                    adapt_delta = 0.80, # default
+                    step_size   = 0.001) 
+
+sf <- run_stan_file(fn, fit_options = fit_options, stan_path)
+```
+
+```{r, fig.height = 3.5}
+traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+```
+
+
+\newpage
+
+# Summary
+
+## Fits
+
+### Incidence
+
+\hfill
+
+```{r inc_fits_g, fig.height = 7}
+
+set.seed(19860618)
+incidence_g <- purrr::map(sim_incidences_list, function(df) {
+  
+  sample_iters <- sample.int(8000, 100)
+  
+  df <- df %>% filter(iter %in% sample_iters)
+  
+  ggplot(df, aes(x = time, y = value)) +
+  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
+  geom_point(data = irish_data, aes(y = y), colour = "steelblue",
+             alpha = 0.8, size = 0.5) +
+  theme_pubr() +
+  labs(subtitle = str_glue("Order: {unique(df$order)}"))
+}) %>% compact()
+
+(incidence_g[[1]] + incidence_g[[2]] + incidence_g[[3]]) / 
+  ( incidence_g[[4]] + incidence_g[[5]] + incidence_g[[6]]) /
+  (incidence_g[[7]] + incidence_g[[8]] + incidence_g[[9]])
+
+```
+
+\newpage
+
+### Mobility fits
+
+\hfill
+
+```{r mob_fits_g, fig.height = 7}
+mobility_g <- imap(Z_list, function(df, i) {
+  
+  sample_iters <- sample.int(8000, 100)
+  df           <- df %>% filter(iter %in% sample_iters)
+  
+  ggplot(df, aes(x = time, y = value)) +
+  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
+  theme_pubr() +
+  geom_point(data = drv_data_obj$df, aes(y = y2), colour = "steelblue", 
+             alpha = 0.8, size = 0.5) +
+  labs(subtitle = str_glue("Order: {i}"))
+}) %>% compact()
+
+(mobility_g[[1]] + mobility_g[[2]] + mobility_g[[3]]) / (mobility_g[[4]] + mobility_g[[5]] + mobility_g[[6]]) /
+  (mobility_g[[7]] + mobility_g[[8]] + mobility_g[[9]])
+```
+
+
+
+
+## Mean Absolute Scaled Error 
+
+```{r}
+mase_inc <- imap_dfr(sim_incidences_list, mase_per_iter, 
+                     data_vector = irish_data$y)
+
+ggplot(mase_inc, aes(x = as.factor(order), y = mase)) +
+  geom_boxplot(aes(group = order)) +
+  theme_pubr() +
+  labs(subtitle = "Incidence prediction accuracy",
+       y = "MASE [Unitless]",
+       x = "Delay order")
+```
+
+```{r}
+wide_inc <- pivot_wider(mase_inc, names_from = "order", values_from = "mase")
+
+map_dfr(2:n_orders, function(i) {
+  x2 <- wide_inc[, i + 1] %>% pull() 
+  x1 <- wide_inc[, i] %>% pull() 
+  gains <- x1 - x2
+  data.frame(gain_from = i, gain = gains )
+}) -> gains_df
+
+
+gains_df %>% group_by(gain_from) %>% 
+  summarise(fraction_gain = percent(sum(gain > 0) / 8000),
+            mean = round(mean(gain), 3), vals = round(quantile(gain, c(0.025, 0.975)), 3), 
+            quantile = c("0.025", "0.975")) %>% 
+  pivot_wider(names_from = quantile, values_from = vals) -> summary_gains
+
+colnames(summary_gains) <- c("Gains from", "Gain fraction", "Mean", "2.5%", "97,5%")
+
+knitr::kable(summary_gains, "latex", booktabs = TRUE)
+```
+
+
+```{r, fig.height = 3.5}
+mase_mob <- imap_dfr(Z_list, mase_per_iter, 
+                     data_vector = drv_data_obj$df$y2)
+
+ggplot(mase_mob, aes(x = as.factor(order), y = mase)) +
+  geom_boxplot(aes(group = order)) +
+  theme_pubr() +
+  labs(subtitle = "Mobility prediction accuracy",
+       x        = "Delay order")
+```
+
+```{r}
+wide_mob <- pivot_wider(mase_mob, names_from = "order", values_from = "mase")
+
+map_dfr(2:n_orders, function(i) {
+  x2 <- wide_mob[, i + 1] %>% pull() 
+  x1 <- wide_mob[, i] %>% pull() 
+  gains <- x1 - x2
+  data.frame(gain_from = i, gain = gains )
+}) -> gains_df
+
+
+gains_df %>% group_by(gain_from) %>% 
+  summarise(fraction_gain = percent(sum(gain > 0) / 8000),
+            mean = round(mean(gain), 3), vals = round(quantile(gain, c(0.025, 0.975)), 3), 
+            quantile = c("0.025", "0.975")) %>% 
+  pivot_wider(names_from = quantile, values_from = vals) -> summary_gains
+
+colnames(summary_gains) <- c("Gains from", "Gain fraction", "Mean", "2.5%", "97,5%")
+
+knitr::kable(summary_gains, "latex", booktabs = TRUE)
+```
+
+
+
+## Estimates
+
+```{r, fig.height = 5}
+source("./R_scripts/R_estimates.R")
+
+imap_dfr(posterior_list, function(df, i) {
+  
+  df %>% select(zeta, P_0, nu, upsilon) %>% 
+    mutate(R_0 = estimate_r(zeta), iter = row_number(), order = i) %>% 
+    pivot_longer(c(-iter, -order))
+}) -> tidy_pars_df
+
+
+ggplot(tidy_pars_df, aes(x = as.factor(order), y = value)) +
+  geom_boxplot(aes(group = order), outlier.size = 0.1, 
+               outlier.colour = "grey50", outlier.alpha = 0.5) +
+  facet_wrap(~name, scales = "free", labeller = label_parsed) +
+  labs(x = "Delay order", y = "Value") +
+  theme_pubr()
+```
+
+```{r estimate_summary_t}
+
+format_estimate <- function(mean, quantiles) {
+  m  <- str_pad(round(mean, 2), 4,  "right", 0)
+  ll <- str_pad(round(quantiles[[1]], 2), 4,  "right", 0)
+  ul <- str_pad(round(quantiles[[2]], 2), 4,  "right", 0)
+  
+  str_glue("{m} [{ll}-{ul}]")
+}
+tidy_pars_df %>% group_by(order, name) %>% 
+  summarise(estimate = format_estimate(mean(value), 
+                                       quantile(value, c(0.025, 0.975)))) %>% 
+  pivot_wider(names_from = name, values_from = estimate) %>% 
+  select(order, R_0, zeta, P_0, nu, upsilon)-> summary_est
+
+colnames(summary_est) <- c("Order", "R(0)", "$\\zeta$", "P(0)", "$\\nu$", "$\\upsilon$")
+
+knitr::kable(summary_est, "latex", booktabs = TRUE, escape = FALSE)
+```
+
+\newpage
+
+# Prediction of hidden states
+
+Based on the results above, we select the structure of order 5 as the model for
+predicting hidden states.
+
+```{r}
+inc_df <- sim_incidences_list[[5]] %>% select(-order, -variable)
+
+wkl_inc <- irish_data %>% slice(1:77)%>%
+  mutate(week = ((time - 1) %/% 7) + 1) %>% 
+  group_by(week) %>% summarise(y = sum(y)) %>% 
+  mutate(time = week * 7)
+
+wkl_df <- inc_df %>% filter(time <= 77) %>% 
+  mutate(week = ((time - 1) %/% 7) + 1) %>% 
+  group_by(iter, week) %>% 
+  summarise(value = sum(value))
+
+pred_inc <- wkl_df %>% group_by(week) %>% 
+  summarise(median = median(value), vals = quantile(value, c(0.025, 0.975)),
+            lims = c("lower_lim", "upper_lim")) %>% 
+  pivot_wider(names_from = lims, values_from = vals)
+
+g1 <- plot_wkl_fit(pred_inc, wkl_inc, "Weekly incidence", "Incidence fit")
+```
+
+```{r}
+actual_mob <- drv_data_obj$df %>% 
+  mutate(week = time / 7) %>% 
+  rename(y = y2)
+
+mob_df <- Z_list[[5]] %>% select(-stock) %>% 
+  mutate(week = time / 7)
+
+summary_mob <- mob_df %>% group_by(week) %>% 
+  summarise(median = median(value), vals = quantile(value, c(0.025, 0.975)),
+            lims = c("lower_lim", "upper_lim")) %>% 
+  pivot_wider(names_from = lims, values_from = vals)
+
+g2 <- plot_wkl_fit(summary_mob, actual_mob, "Mobility index", "Mobility fit")
+```
+
+```{r}
+source("./R_scripts/R_estimates.R")
+pst_df <- posterior_list[[5]]
+
+zeta_df <- pst_df %>% select(zeta) %>% 
+  mutate(iter = row_number())
+
+mob_df %>% rename(Z = value) %>% left_join(zeta_df, by = "iter") %>% 
+  mutate(beta = zeta * Z,
+         R    = estimate_r(beta)) -> R_df
+
+R_df %>% mutate(week = time / 7) %>% 
+  group_by(week) %>% 
+    summarise(median = median(R), vals = quantile(R, c(0.025, 0.975)),
+            lims = c("lower_lim", "upper_lim")) %>% 
+  pivot_wider(names_from = lims, values_from = vals) -> summary_R
+
+ggplot(summary_R, aes(x = week, y = median)) +
+  geom_line(colour = "steelblue") +
+  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim),
+              fill = "steelblue") +
+  labs(y = parse(text = "R[t]"), x = "Week",
+       title = "Basic reproductive number")+
+  scale_x_continuous(breaks = 1:11) +
+  theme_pubr() +
+  theme(axis.title = element_text(size = 8, colour = "grey40"),
+        axis.text  = element_text(colour = "grey60", size = 6),
+        plot.title = element_text(size = 9, colour = "grey25"),
+        axis.ticks = element_line(colour = "grey60")) -> g3
+```
+```{r}
+S_df %>% mutate(s = value / 4937796) -> s_df
+
+bind_cols(R_df[, c("iter", "week", "R")], select(s_df, s)) %>% 
+  mutate(Re = R * s) -> Re_df
+
+summary_Re <- Re_df %>% group_by(week) %>% 
+    summarise(median = median(R), vals = quantile(R, c(0.025, 0.975)),
+            lims = c("lower_lim", "upper_lim")) %>% 
+  pivot_wider(names_from = lims, values_from = vals)
+
+
+ggplot(summary_Re, aes(x = week, y = median)) +
+  geom_hline(yintercept = 1, colour = "grey60", linetype = "dashed") +
+  geom_line(colour = "steelblue") +
+  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim),
+              fill = "steelblue") +
+  geom_vline(xintercept = 1.86, colour = "grey50", linetype = "dotted") +
+  annotate("text", x = 1.96, y = 6, size = 1.5,
+             label = "Delay phase", hjust = 0, size = 3, colour = "grey50") +
+  geom_vline(xintercept = 4, colour = "grey50", linetype = "dotted") +
+  annotate("text", x = 4.1, y = 6, size = 1.5,
+             label = "Stay at home", hjust = 0, size = 3, colour = "grey50") +
+  labs(y = parse(text = "Re[t]"), x = "Week",
+       title = "Effective reproductive number")+
+  scale_x_continuous(breaks = 1:11) +
+  theme_pubr()  +
+  theme(axis.title = element_text(size = 8, colour = "grey40"),
+        axis.text  = element_text(colour = "grey60", size = 6),
+        plot.title = element_text(size = 9, colour = "grey25"),
+        axis.ticks = element_line(colour = "grey60"))-> g4
+```
+
+```{r}
+(g1 / g2) | (g3 / g4)
+```
+
+```{r}
+results_list <- list(label   = "SMOOTH_5",
+                     sim_inc = pred_inc,
+                     sim_mob = summary_mob,
+                     R_t     = summary_R,
+                     Re_t    = summary_Re)
+
+fn <- file.path(folder, "predictions.rds")
+
+if(!file.exists(fn)) saveRDS(results_list, fn)
+```
+

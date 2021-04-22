@@ -125,16 +125,20 @@ plot_daily_data <- function(irish_data, drv_df) {
     geom_point(colour = "steelblue", alpha = 0.8) +
     stat_smooth(geom = 'line', alpha = 0.5, se = FALSE, span = 0.25,
                 colour = "grey50", size = 1) +
-    labs(y = "Incidence [new cases per week]",
+    labs(y = "Incidence\n[new cases per week]",
          x = "Week of Lab specimen collection") +
-    theme_pubr()
+    theme_pubr() +
+    theme(axis.text.y = element_text(size = 7),
+          axis.title.y = element_text(size = 8))
   
   g2 <- ggplot(drv_df, aes(x = date, y = y2)) +
     geom_point(colour = "steelblue", alpha = 0.8) +
     stat_smooth(geom = 'line', alpha = 0.5, se = FALSE, 
                 colour = "grey50", size = 1) +
-    labs(y = "Mobility index", x = "Date") +
-    theme_pubr()
+    labs(y = "Mobility index\n[Unitless]", x = "Date") +
+    theme_pubr() +
+    theme(axis.text.y = element_text(size = 7),
+          axis.title.y = element_text(size = 8))
   
   g1 / g2
 }
@@ -237,41 +241,57 @@ plot_priors <- function(){
               colour = "grey60") +
     scale_x_continuous(breaks = c(0, 5, 10)) +
     theme_pubr() +
-    labs(y = "Probability density",
-         x = bquote(zeta)) +
+    labs(y        = "Probability density",
+         x        = bquote(zeta),
+         subtitle = "lognormal(0,1)") +
     theme(axis.line.y = element_blank(),
           axis.ticks = element_blank(),
-          axis.text.y = element_blank())
+          axis.text.y = element_blank(),
+          axis.title.y = element_text(size = 8),
+          plot.subtitle = element_text(size = 8, colour = "grey60"))
   
   g2 <- g1 +
-    labs(x = "P(0)", y = "")
+    labs(x = "P(0)", y = "", subtitle = "lognormal(0,1)")
   
   g3   <- ggplot(NULL, aes(c(0, 1))) + 
     geom_area(stat = "function", fun = dbeta, fill = "grey95", 
               colour = "grey60", args = list(shape1 = 2, shape2 = 2)) +  
     scale_x_continuous(breaks = c(0, 0.5, 1)) +
     theme_pubr() +
-    labs(y = "Probability density",
-         x = bquote(nu)) +
+    labs(y        = "Probability density",
+         x        = bquote(nu),
+         subtitle = "beta(2,2)") +
     theme(axis.line.y = element_blank(),
           axis.ticks = element_blank(),
-          axis.text.y = element_blank())
+          axis.text.y = element_blank(),
+          axis.title.y = element_text(size = 8),
+          plot.subtitle = element_text(size = 8, colour = "grey60"))
   
-  g4 <- g3 + labs(x = bquote(upsilon), y = "")
+  g4 <- g3 + labs(x = bquote(upsilon), y = "", subtitle = "beta(2,2)")
   
-  g5 <- ggplot(NULL, aes(c(0, 10))) + 
-    geom_area(stat = "function", fun = dhcauchy, fill = "grey95", 
-              colour = "grey60", args = list(sigma = 1)) +  
-    scale_x_continuous(breaks = c(0, 5, 10)) +
+  (g1 + g2) / (g3 + g4)
+}
+
+
+plot_wkl_fit <- function(summary_fit, actual_df, y_lab, title_lab) {
+  
+  ggplot(summary_fit, aes(x = week, y = median)) +
+    geom_point(data = actual_df, aes(x = week, y = y), colour = "grey45",
+               size = 1, alpha = 0.75) +
+    geom_line(colour = "steelblue") +
+    scale_y_continuous(labels = comma) +
+    geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim),
+                fill = "steelblue") +
+    scale_x_continuous(breaks = 1:11) +
     theme_pubr() +
-    labs(y = "",
-         x = bquote(tau)) +
-    theme(axis.line.y = element_blank(),
-          axis.ticks = element_blank(),
-          axis.text.y = element_blank())
+    # labs(y = "Weekly incidence", x = "Week",
+    #      title = "Incidence fit") +
+    labs(y = y_lab, x = "Week", title = title_lab) +
+    theme(axis.title = element_text(size = 8, colour = "grey40"),
+          axis.text  = element_text(colour = "grey60", size = 6),
+          plot.title = element_text(size = 9, colour = "grey25"),
+          axis.ticks = element_line(colour = "grey60"))
   
-  
-  (g1 + g2) / (g3 + g4 + g5)
 }
 
 
