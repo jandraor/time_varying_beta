@@ -177,7 +177,7 @@ raw_likelihood <- function(all_df, var_x) {
   all_df %>%
     filter(type == "result") %>%
     ggplot(aes(x = !!ensym(var_x), y = loglik))+
-    geom_point()+
+    geom_point(colour = "grey50")+
     theme_pubr() +
     geom_smooth(se = FALSE) +
     labs(
@@ -196,11 +196,12 @@ profile_plot <- function(profile_df, prof_var, ci_cutoff) {
     filter(rank(-loglik)< 3) %>%
     ungroup() %>%
     ggplot(aes(x = !!ensym(prof_var),y = loglik))+
-    geom_point()+
+    geom_point(colour = "grey50")+
     geom_smooth(method = "loess", se = FALSE)+
     geom_hline(color = "red", yintercept = ci_cutoff, linetype = "dashed")+
     lims(y = maxloglik - c(5,0))+
-    labs(y = "Log-likelihood", x = parse(text = prof_var)) +
+    labs(y = "Log-likelihood", x = parse(text = prof_var),
+         subtitle = "Unadjusted profile") +
     theme_pubr()
 }
 
@@ -227,7 +228,8 @@ plot_MCAP <- function(prof_ll, var_name, span = 0.75){
     geom_point(alpha = 0.7, colour = "grey50") +
     geom_smooth(span = span, se = FALSE) +
     geom_hline(yintercept = cut_off_smth, colour = "red", linetype = "dotted") +
-    labs(y = "Log-likelihood", x = parse(text = var_name)) +
+    labs(y = "Log-likelihood", x = parse(text = var_name),
+         subtitle = "MCAP") +
     theme_pubr()
 }
 
@@ -272,6 +274,14 @@ plot_priors <- function(){
   
   
   (g1 + g2) / (g3 + g4 + g5)
+}
+
+plot_lik_surface <- function(tidy_ll_df) {
+  ggplot(tidy_ll_df, aes(x = value, y = loglik)) +
+    geom_point(colour = "grey50", alpha = 0.75) +
+    facet_wrap(~name, scales = "free", labeller = label_parsed) +
+    geom_hline(yintercept = cutoff, linetype = "dashed", colour = "red") +
+    theme_pubr() 
 }
 
 
