@@ -286,8 +286,6 @@ plot_wkl_fit <- function(summary_fit, actual_df, y_lab, title_lab) {
                 fill = "steelblue") +
     scale_x_continuous(breaks = 1:11) +
     theme_pubr() +
-    # labs(y = "Weekly incidence", x = "Week",
-    #      title = "Incidence fit") +
     labs(y = y_lab, x = "Week", title = title_lab) +
     theme(axis.title = element_text(size = 8, colour = "grey40"),
           axis.text  = element_text(colour = "grey60", size = 6),
@@ -302,6 +300,23 @@ plot_lik_surface <- function(tidy_ll_df) {
     facet_wrap(~name, scales = "free", labeller = label_parsed) +
     geom_hline(yintercept = cutoff, linetype = "dashed", colour = "red") +
     theme_pubr() 
+}
+
+plot_fit_comparison <- function(sim_data, actual_data, y_label, title_label){
+  ggplot(sim_data, aes(x = week, y = median)) +
+    geom_line(aes(colour = mdl, group = mdl)) +
+    scale_y_continuous(labels = comma) +
+    geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim,
+                                  fill = mdl)) +
+    geom_point(data = actual_data, aes(x = week, y = y), colour = "grey45",
+               size = 1) +
+    theme_pubr() +
+    labs(y = y_label, x = "Week", 
+         title = title_label) +
+    theme(axis.title = element_text(size = 8, colour = "grey40"),
+          axis.text  = element_text(colour = "grey60", size = 6),
+          plot.title = element_text(size = 9, colour = "grey25"),
+          axis.ticks = element_line(colour = "grey60"))
 }
 
 

@@ -1,0 +1,143 @@
+---
+title: "S3 Appendix"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE,
+                      warning = FALSE)
+
+library(dplyr)
+library(imputeTS)
+library(lubridate)
+library(purrr)
+library(readr)
+library(readxl)
+library(stringr)
+library(tidyr)
+
+source("./R_scripts/plots.R")
+```
+
+```{r}
+mdls <- c("GBM", "SMTH")
+```
+
+
+```{r}
+source("./R_scripts/irish_data.R")
+irish_data   <- get_irish_data()
+
+wkl_inc <- irish_data %>% slice(1:77)%>%
+  mutate(week = ((time - 1) %/% 7) + 1) %>% 
+  group_by(week) %>% summarise(y = sum(y)) %>% 
+  mutate(time = week * 7)
+
+
+
+map_df(mdls, function(mdl) {
+  folder   <- str_glue("./Saved_objects/Irish_data/SEI3R_{mdl}")
+  if(mdl != "SMTH") {
+    folder <- paste0(folder, "/weekly/mdl_2")
+  }
+  
+  fn       <- file.path(folder, "predictions.rds") 
+  pred_obj <-readRDS(fn)
+  
+  pred_obj$sim_inc %>% mutate(mdl = pred_obj$label)
+}) -> sim_inc
+
+
+plot_fit_comparison(sim_inc, wkl_inc, "Incidence [New cases/week]",
+                    "Incidence fit per model") -> g1
+```
+
+```{r}
+source("./R_scripts/apple.R")
+drv_data_obj <- get_driving_data()
+
+actual_mob <- drv_data_obj$df %>% 
+  mutate(week = time / 7) %>% 
+  rename(y = y2) %>% 
+  filter(week >=1 & week <= 11)
+
+map_df(mdls, function(mdl) {
+  folder   <- str_glue("./Saved_objects/Irish_data/SEI3R_{mdl}")
+  if(mdl != "SMTH") {
+    folder <- paste0(folder, "/weekly/mdl_2")
+  }
+  
+  fn       <- file.path(folder, "predictions.rds") 
+  pred_obj <-readRDS(fn)
+  
+  pred_obj$sim_mob %>% mutate(mdl = pred_obj$label)
+}) %>% filter(week >=1 & week <= 11) -> sim_mob
+
+plot_fit_comparison(sim_mob, actual_mob, "Mobility index [Unitless]",
+                    "Mobility fit per model") -> g2
+```
+
+```{r}
+map_df(mdls, function(mdl) {
+  folder   <- str_glue("./Saved_objects/Irish_data/SEI3R_{mdl}")
+  if(mdl != "SMTH") {
+    folder <- paste0(folder, "/weekly/mdl_2")
+  }
+  
+  fn       <- file.path(folder, "predictions.rds") 
+  pred_obj <-readRDS(fn)
+  
+  pred_obj$R_t %>% mutate(mdl = pred_obj$label)
+})%>% filter(week >=1 & week <= 11) -> sim_R
+
+ggplot(sim_R, aes(x = week, y = median)) +
+  geom_line(aes(group = mdl, colour = mdl)) +
+  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim,
+                                fill = mdl)) +
+  labs(y = parse(text = "R[t]"), x = "Week",
+       title = "Basic reproductive number")+
+  scale_x_continuous(breaks = 1:11) +
+  theme_pubr() +
+  theme(axis.title = element_text(size = 8, colour = "grey40"),
+        axis.text  = element_text(colour = "grey60", size = 6),
+        plot.title = element_text(size = 9, colour = "grey25"),
+        axis.ticks = element_line(colour = "grey60")) -> g3
+```
+
+```{r}
+map_df(mdls, function(mdl) {
+  folder   <- str_glue("./Saved_objects/Irish_data/SEI3R_{mdl}")
+  if(mdl != "SMTH") {
+    folder <- paste0(folder, "/weekly/mdl_2")
+  }
+  
+  fn       <- file.path(folder, "predictions.rds") 
+  pred_obj <-readRDS(fn)
+  
+  pred_obj$Re_t %>% mutate(mdl = pred_obj$label)
+})%>% filter(week >=1 & week <= 11) -> sim_Re
+
+ggplot(sim_Re, aes(x = week, y = median)) +
+  geom_hline(yintercept = 1, colour = "grey60", linetype = "dashed") +
+  geom_line(aes(group = mdl, colour = mdl)) +
+  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim,
+                                fill = mdl)) +
+  geom_vline(xintercept = 1.86, colour = "grey50", linetype = "dotted") +
+  annotate("text", x = 1.96, y = 6, size = 1.5,
+             label = "Delay phase", hjust = 0, size = 3, colour = "grey50") +
+  geom_vline(xintercept = 4, colour = "grey50", linetype = "dotted") +
+  annotate("text", x = 4.1, y = 6, size = 1.5,
+             label = "Stay at home", hjust = 0, size = 3, colour = "grey50") +
+  labs(y = parse(text = "Re[t]"), x = "Week",
+       title = "Effective reproductive number")+
+  scale_x_continuous(breaks = 1:11) +
+  theme_pubr()  +
+  theme(axis.title = element_text(size = 8, colour = "grey40"),
+        axis.text  = element_text(colour = "grey60", size = 6),
+        plot.title = element_text(size = 9, colour = "grey25"),
+        axis.ticks = element_line(colour = "grey60")) -> g4
+```
+
+```{r, fig.height = 6}
+(g1 / g2) | (g3 / g4)
+```
