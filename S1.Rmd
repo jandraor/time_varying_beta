@@ -110,6 +110,7 @@ imputed_driving_data(drv_data_obj$raw_data,
 \end{equation}
 
 \begin{equation}
+   \color{red}
    \frac{dZ}{dt} =  \alpha Z(t) dW 
 \end{equation}
 
@@ -333,6 +334,7 @@ cutoff_list_GBM         <- profile_list_GBM
 mcap_list <- profile_list_GBM
 ```
 
+\newpage
 
 #### $\zeta$
 
@@ -439,14 +441,10 @@ maxloglik                   <- max(profile_list_GBM[[var_name]]$loglik,
                                    na.rm = TRUE)
 
 cutoff_list_GBM[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
-```
 
-```{r, fig.height = 3.5}
 profile_plot(profile_list_GBM[[var_name]], var_name, 
-             cutoff_list_GBM[[var_name]])
+             cutoff_list_GBM[[var_name]]) -> g1
 ```
-
-##### MCAP
 
 ```{r}
 source("./R_scripts/mcap.R")
@@ -461,15 +459,14 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-ggplot(prof_ll, aes(x = zeta, y = loglik)) +
-  geom_point(alpha = 0.7, colour = "grey50") +
-  geom_smooth(se = FALSE) +
-  geom_hline(yintercept = cut_off_smth, colour = "red", linetype = "dotted") +
-  theme_pubr()
+plot_MCAP(prof_ll, var_name) -> g2
 ```
 
+```{r profile_zeta_GBM_g, fig.height =7}
+g1 / g2
+```
 
-#### P(0) profile
+#### P(0
 
 ```{r}
 #===============================================================================
@@ -479,6 +476,8 @@ var_name <- "P_0"
 
 
 ##### Raw likelihood
+
+\hfill
 
 ```{r}
 raw_likelihood(guess_result_df, var_name)
@@ -502,8 +501,12 @@ profile_design(
   upper = box[2, c("zeta", "tau", "alpha")],
   nprof = 15, type = "runif"
 ) -> guesses
-plot(guesses, cex = 0.25, pch = 16)
 ```
+
+```{r}
+plot_guesses(guesses)
+```
+
 
 ##### Profile traces
 
@@ -544,8 +547,6 @@ prof_ll <- extract_ll_df(profile_results) %>%
 profile_list_GBM[[var_name]] <- prof_ll %>% 
   mutate(profile_over = var_name)
 profile_list_GBM[[var_name]] -> all
-
-pairs(~loglik+zeta + P_0 + tau + alpha, data = all, pch=16)
 ```
 
 ##### Profile likelihood
@@ -557,14 +558,10 @@ maxloglik                   <- max(profile_list_GBM[[var_name]]$loglik,
                                    na.rm = TRUE)
 
 cutoff_list_GBM[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
-```
 
-```{r, fig.height = 3.5}
 profile_plot(profile_list_GBM[[var_name]], var_name,
-             cutoff_list_GBM[[var_name]])
+             cutoff_list_GBM[[var_name]]) -> g1
 ```
-
-##### MCAP
 
 ```{r}
 source("./R_scripts/mcap.R")
@@ -581,10 +578,16 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-plot_MCAP(prof_ll, var_name, span)
+plot_MCAP(prof_ll, var_name, span) -> g2
+```
+
+```{r profile_P_0_GBM_g, fig.height =7}
+g1 / g2
 ```
 
 #### $\alpha$
+
+\hfill
 
 ```{r}
 #===============================================================================
@@ -611,10 +614,10 @@ loglik_df %>%
 set.seed(625483738)
 
 profile_design(
-  alpha  = seq(0, 0.5,length = 40),
+  alpha  = seq(0, 0.5,length = 54),
   lower  = box[1, c("zeta" , "tau", "P_0")],
   upper = box[2, c("zeta", "tau", "P_0")],
-  nprof = 15, type = "runif"
+  nprof = 15, type = "sobol"
 ) -> guesses
 ```
 
@@ -672,9 +675,8 @@ profile_list_GBM[[var_name]] <- prof_ll %>%
 
 profile_list_GBM[[var_name]] %>%
   filter(loglik > max(loglik)- 100)-> all
-
-pairs(~loglik+zeta + P_0 + tau + alpha, data = all, pch=16)
 ```
+\newpage
 
 ##### Profile likelihood
 
@@ -685,18 +687,12 @@ maxloglik                   <- max(profile_list_GBM[[var_name]]$loglik,
                                    na.rm = TRUE)
 
 cutoff_list_GBM[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
-```
 
-```{r, fig.height = 3.5}
 profile_plot(profile_list_GBM[[var_name]], var_name,
-             cutoff_list_GBM[[var_name]])
+             cutoff_list_GBM[[var_name]]) -> g1
 ```
 
-##### MCAP
-
-\hfill
-
-```{r}
+```{r mcap_alpha_GBM}
 source("./R_scripts/mcap.R")
 
 span <- 0.6
@@ -711,8 +707,15 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-plot_MCAP(prof_ll, var_name, span)
+plot_MCAP(prof_ll, var_name, span) -> g2
 ```
+
+```{r, fig.height = 7}
+g1 / g2
+```
+
+
+\newpage
 
 #### $\tau$ profile
 
@@ -791,9 +794,9 @@ profile_list_GBM[[var_name]] <- extract_ll_df(profile_results) %>%
   mutate(profile_over = var_name)
 
 profile_list_GBM[[var_name]] -> all
-
-pairs(~loglik+zeta + P_0 + tau + alpha, data = all, pch=16)
 ```
+
+\newpage
 
 ##### Profile likelihood
 
@@ -804,14 +807,11 @@ maxloglik                   <- max(profile_list_GBM[[var_name]]$loglik,
                                    na.rm = TRUE)
 
 cutoff_list_GBM[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
-```
 
-```{r, fig.height = 3.5}
 profile_plot(profile_list_GBM[[var_name]], var_name,
-             cutoff_list_GBM[[var_name]])
+             cutoff_list_GBM[[var_name]]) -> g1
 ```
 
-##### MCAP
 
 ```{r GBM_MCAP_tau}
 source("./R_scripts/mcap.R")
@@ -828,7 +828,11 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-plot_MCAP(prof_ll, var_name, span)
+plot_MCAP(prof_ll, var_name, span) -> g2
+```
+
+```{r, fig.height =7}
+g1 / g2
 ```
 
 ### Estimates
@@ -849,11 +853,7 @@ tidy_ll_surface <- ll_surface %>%
 
 cutoff <- max(tidy_prof$loglik) - 0.5 * qchisq(df = 1,p = 0.95)
  
-ggplot(tidy_prof, aes(x = value, y = loglik)) +
-  geom_point() +
-  facet_wrap(~name, scales = "free", labeller = label_parsed) +
-  geom_hline(yintercept = cutoff, linetype = "dashed", colour = "red") +
-  theme_pubr()
+plot_lik_surface(tidy_prof)
 ```
 
 ```{r GBM_surf_est}
@@ -1048,20 +1048,8 @@ summary_hindcast %>% filter(var == "C") %>%
   pivot_wider(names_from = type, values_from = value) %>% 
   ungroup() %>% mutate(week = 1:11)-> pred_inc
 
-g1 <- ggplot(pred_inc, aes(x = week, y = median)) +
-  geom_point(data = wkl_inc, aes(x = week, y = y)) +
-  geom_line(colour = "steelblue") +
-  scale_y_continuous(labels = comma) +
-  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim),
-              fill = "steelblue") +
-  scale_x_continuous(breaks = 1:11) +
-  theme_pubr() +
-  labs(y = "Weekly incidence", x = "Week",
-       title = "Incidence fit") +
-  theme(axis.title = element_text(size = 8, colour = "grey40"),
-        axis.text  = element_text(colour = "grey60", size = 6),
-        plot.title = element_text(size = 9, colour = "grey25"),
-        axis.ticks = element_line(colour = "grey60"))
+g1 <- plot_wkl_fit(pred_inc, wkl_inc, y_lab = "Weekly incidence", 
+                   "Incidence fit")
 ```
 
 ```{r}
@@ -1133,6 +1121,19 @@ ggplot(re_df, aes(x = week, y = median)) +
 ```{r}
 (g1 / g2) | (g3 / g4)
 ```
+
+```{r}
+results_list <- list(label   = "GBM",
+                     sim_inc = pred_inc,
+                     sim_mob = pred_mob_effect,
+                     R_t     = r_df,
+                     Re_t    = re_df)
+
+fn <- file.path(folder, "predictions.rds")
+
+if(!file.exists(fn)) saveRDS(results_list, fn)
+```
+
 
 \newpage
 
@@ -1511,10 +1512,10 @@ loglik_df %>%
 set.seed(516993613)
 
 profile_design(
-  P_0   = seq(0, 10,length = 40),
+  P_0   = seq(0, 10,length = 54),
   lower = box[1, c("zeta" , "tau", "alpha", "nu", "upsilon")],
   upper = box[2, c("zeta", "tau", "alpha", "nu", "upsilon")],
-  nprof = 20, type = "sobol"
+  nprof = 15, type = "sobol"
 ) -> guesses_P_0
 ```
 
@@ -2149,11 +2150,7 @@ tidy_ll_surface <- ll_surface %>%
 
 cutoff <- max(tidy_prof$loglik) - 0.5 * qchisq(df = 1,p = 0.95)
  
-ggplot(tidy_prof, aes(x = value, y = loglik)) +
-  geom_point() +
-  facet_wrap(~name, scales = "free", labeller = label_parsed) +
-  geom_hline(yintercept = cutoff, linetype = "dashed", colour = "red") +
-  theme_pubr()
+plot_lik_surface(tidy_prof)
 ```
 
 ```{r}
@@ -2287,11 +2284,10 @@ ggplot(all_est, aes(x = method, y = mle)) +
 
 #### Sampling space
 
+\hfill
+
 ```{r}
 mle_boundary <- prof_est_df %>% filter(loglik > max(loglik, na.rm = T)- 6)
-
-pairs(~loglik+zeta + P_0 + tau + alpha + nu + upsilon, 
-      data = mle_boundary, pch = 16)
 
 unk_par_MLE <- mle_boundary %>% select(unk_names)
 
