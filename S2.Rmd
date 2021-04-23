@@ -726,6 +726,7 @@ ggplot(summary_R, aes(x = week, y = median)) +
         plot.title = element_text(size = 9, colour = "grey25"),
         axis.ticks = element_line(colour = "grey60")) -> g3
 ```
+
 ```{r}
 S_df %>% mutate(s = value / 4937796) -> s_df
 
@@ -763,12 +764,23 @@ ggplot(summary_Re, aes(x = week, y = median)) +
 (g1 / g2) | (g3 / g4)
 ```
 
+
+
 ```{r}
-results_list <- list(label   = "SMOOTH_5",
-                     sim_inc = pred_inc,
-                     sim_mob = summary_mob,
-                     R_t     = summary_R,
-                     Re_t    = summary_Re)
+
+tidy_pars_df %>% filter(order == 5) %>% select(-order) %>% 
+  group_by(name) %>% summarise(mean   = mean(value), 
+                               vals   = quantile(value, c(0.025, 0.975)),
+                               lims   = c("lower_limit", "upper_limit")) %>% 
+  pivot_wider(names_from = lims, values_from = vals) -> est_df
+
+
+results_list <- list(label         = "SMOOTH_5",
+                     sim_inc       = pred_inc,
+                     sim_mob       = summary_mob,
+                     R_t           = summary_R,
+                     Re_t          = summary_Re,
+                     estimates_df  = est_df)
 
 fn <- file.path(folder, "predictions.rds")
 
