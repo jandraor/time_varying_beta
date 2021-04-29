@@ -5,6 +5,8 @@ library(ggpubr)
 library(patchwork)
 library(scales)
 
+source("./R_scripts/plots_inference.R")
+
 pm_likelihood <- function(df) {
   tidy_loglik_df <- df %>% filter(type != "guess") %>%
     mutate(row_number = row_number()) %>% 
@@ -190,7 +192,7 @@ raw_likelihood <- function(all_df, var_x) {
     )
 }
 
-profile_plot <- function(profile_df, prof_var, ci_cutoff) {
+profile_plot <- function(profile_df, prof_var, maxloglik, ci_cutoff) {
   
   prof_var <- as.character(prof_var)
   

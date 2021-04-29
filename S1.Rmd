@@ -11,6 +11,7 @@ header-includes:
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE,
                       message = FALSE)
 
+library(copula)
 library(deSolve)
 library(doParallel)
 library(doRNG)
@@ -329,9 +330,8 @@ profile_list_GBM        <- vector(mode = "list",
 
 names(profile_list_GBM) <- names(par_obj$unknown)
 
-cutoff_list_GBM         <- profile_list_GBM
-
-mcap_list <- profile_list_GBM
+unadjusted_profile_list <- profile_list_GBM
+mcap_list               <- profile_list_GBM
 ```
 
 \newpage
@@ -416,8 +416,7 @@ profile_results <- mif_ll(zeta_profile_mif_results, seed = 744170621,
                           n_cores = 7, filename = fn)
 ```
 
-```{r message=FALSE}
-# 199 out of 575 are valid
+```{r message = FALSE}
 source("./R_scripts/helpers.R")
 
 prof_ll <- extract_ll_df(profile_results) %>% 
@@ -428,8 +427,6 @@ profile_list_GBM[[var_name]] <- prof_ll  %>%
   mutate(profile_over = var_name)
 
 profile_list_GBM[[var_name]] -> all
-
-pairs(~loglik+zeta + P_0 + tau + alpha, data= all, pch=16)
 ```
 
 ##### Profile likelihood
@@ -437,19 +434,23 @@ pairs(~loglik+zeta + P_0 + tau + alpha, data= all, pch=16)
 \hfill
 
 ```{r}
-maxloglik                   <- max(profile_list_GBM[[var_name]]$loglik,
-                                   na.rm = TRUE)
+source("./R_scripts/profile_utils.R")
 
-cutoff_list_GBM[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_GBM[[var_name]], var_name)
 
-profile_plot(profile_list_GBM[[var_name]], var_name, 
-             cutoff_list_GBM[[var_name]]) -> g1
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_GBM[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff) -> g1
 ```
 
 ```{r}
 source("./R_scripts/mcap.R")
 
-mcap_obj <- mcap(prof_ll$loglik, prof_ll[[var_name]])
+span <- 0.75
+
+mcap_obj <- mcap(prof_ll$loglik, prof_ll[[var_name]], lambda = span)
 
 max_smoothed_loglik <- mcap_obj$fit$smoothed %>% max()
 
@@ -459,7 +460,7 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-plot_MCAP(prof_ll, var_name) -> g2
+plot_MCAP(prof_ll, var_name, span = span) -> g2
 ```
 
 ```{r profile_zeta_GBM_g, fig.height =7}
@@ -554,13 +555,15 @@ profile_list_GBM[[var_name]] -> all
 \hfill
 
 ```{r}
-maxloglik                   <- max(profile_list_GBM[[var_name]]$loglik,
-                                   na.rm = TRUE)
+source("./R_scripts/profile_utils.R")
 
-cutoff_list_GBM[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_GBM[[var_name]], var_name)
 
-profile_plot(profile_list_GBM[[var_name]], var_name,
-             cutoff_list_GBM[[var_name]]) -> g1
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_GBM[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff) -> g1
 ```
 
 ```{r}
@@ -682,14 +685,16 @@ profile_list_GBM[[var_name]] %>%
 
 \hfill
 
-```{r}
-maxloglik                   <- max(profile_list_GBM[[var_name]]$loglik,
-                                   na.rm = TRUE)
+```{r GBM_unadjusted_profile_alpha}
+source("./R_scripts/profile_utils.R")
 
-cutoff_list_GBM[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_GBM[[var_name]], var_name)
 
-profile_plot(profile_list_GBM[[var_name]], var_name,
-             cutoff_list_GBM[[var_name]]) -> g1
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_GBM[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff) -> g1
 ```
 
 ```{r mcap_alpha_GBM}
@@ -802,14 +807,16 @@ profile_list_GBM[[var_name]] -> all
 
 \hfill
 
-```{r}
-maxloglik                   <- max(profile_list_GBM[[var_name]]$loglik,
-                                   na.rm = TRUE)
+```{r GBM_unadjusted_profile_tau}
+source("./R_scripts/profile_utils.R")
 
-cutoff_list_GBM[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_GBM[[var_name]], var_name)
 
-profile_plot(profile_list_GBM[[var_name]], var_name,
-             cutoff_list_GBM[[var_name]]) -> g1
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_GBM[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff) -> g1
 ```
 
 
@@ -894,45 +901,18 @@ knitr::kable(par_summary %>%
 
 \hfill
 
-```{r GBM_prof_est}
-source("./R_scripts/R_estimates.R")
-source("./R_scripts/par_summary.R")
+```{r}
+source('./R_scripts/profile_utils.R')
 
-unk_names <- names(par_obj$unknown)
-
-prof_est_df <- do.call("bind_rows", profile_list_GBM) %>% 
-  filter(!is.na(loglik.se) & loglik.se < 1)
-
-par_lims    <- summarise_pars(unk_names, cutoff_list_GBM)
-
-prof_est_df %>% filter(loglik == max(loglik, na.rm = TRUE)) %>%
-  select(-loglik, -loglik.se, -profile_over) %>% unlist() -> mle_estimate
-
-MLE_df <- enframe(mle_estimate, name = "Parameter", value = "MLE") %>%
-  filter(Parameter %in% unk_names)
-
-par_summary <- left_join(MLE_df, par_lims, by = "Parameter")
-
-zeta_estimates <- par_summary %>% filter(Parameter == "zeta") %>% 
-  select(-Parameter) %>% unlist()
-
-R_estimates <- estimate_r(zeta_estimates) %>% bind_rows()
-R_row       <- data.frame(Parameter = "R(0)") %>% bind_cols(R_estimates)
-
-par_summary <- bind_rows(par_summary, R_row) %>% 
-  mutate(Parameter = ifelse(Parameter == "P_0", "P(0)", Parameter)) # formatting
-
-prof_est <- par_summary %>% rename(name = Parameter,
-                                   mle = MLE,
-                                   ll = lower_limit,
-                                   ul = upper_limit) %>% 
-  mutate(method = "Profile")
+par_summary <- get_par_summary(unadjusted_profile_list)
+prof_est    <- par_summary %>% mutate(method = "Profile")
 
 colnames(par_summary) <- c("Parameter", "MLE", "Lower limit", "Upper limit")
 
 knitr::kable(par_summary %>% arrange(Parameter), "latex", booktabs = TRUE,
              escape = FALSE, digits = 2)
 ```
+
 
 #### From MCAP
 
@@ -941,23 +921,8 @@ knitr::kable(par_summary %>% arrange(Parameter), "latex", booktabs = TRUE,
 ```{r GBM_MCAP_est}
 source("./R_scripts/R_estimates.R")
 
-imap_dfr(mcap_list, function(vals_list, name) {
-  data.frame(name = name,
-             mle  = vals_list$mle,
-             ll = vals_list$ll,
-             ul = vals_list$ul) 
-}) -> par_summary
-
-zeta_estimates <- par_summary %>% filter(name == "zeta") %>% 
-  select(-name) %>% unlist()
-
-R_estimates <- estimate_r(zeta_estimates) %>% bind_rows()
-R_row       <- data.frame(name = "R(0)") %>% bind_cols(R_estimates)
-
-par_summary <- bind_rows(par_summary, R_row) %>% 
-  mutate(name = ifelse(name == "P_0", "P(0)", name)) # formatting
-
-mcap_est <- par_summary %>% mutate(method = "MCAP")
+par_summary <- get_par_summary(mcap_list)
+mcap_est    <- par_summary %>% mutate(method = "MCAP")
 
 colnames(par_summary) <- c("Parameter", "MLE", "Lower limit", "Upper limit")
 
@@ -973,13 +938,7 @@ knitr::kable(par_summary %>% arrange(Parameter), "latex", booktabs = TRUE,
 
 all_est <- rbind(surf_est, mcap_est, prof_est)
 
-ggplot(all_est, aes(x = method, y = mle)) +
-  geom_errorbar(aes(ymin = ll, ymax = ul, colour = method)) +
-  geom_point(aes(colour = method)) +
-  scale_colour_manual(values = c("#1D2F31", "#136AA0", "#C1A284")) +
-  facet_wrap(~name, labeller = label_parsed, scales = "free_y") +
-  theme_pubr() +
-  theme(legend.position = "none")
+par_comparison_stochastic(all_est)
 ```
 
 
@@ -989,10 +948,11 @@ ggplot(all_est, aes(x = method, y = mle)) +
 
 \hfill
 
-```{r}
-mle_boundary <-prof_est_df %>% filter(loglik > max(loglik, na.rm = T)- 6)
-
-unk_par_MLE <- mle_boundary %>% select(unk_names)
+```{r GBM_sampling_space}
+unk_par_MLE <- tidy_ll_surface %>% 
+  filter(loglik > max(loglik, na.rm = T)- 6) %>% 
+  pivot_wider(names_from = name, values_from = value) %>% 
+  select(-loglik, -`.id`)
 
 ggpairs(unk_par_MLE) + theme_pubclean()
 ```
@@ -1034,8 +994,8 @@ fn          <- file.path(folder, "summary_hindcast.rds" )
 if(!file.exists(fn)) {
   summary_hindcast <- hindcast_df %>%  group_by(time, var) %>%
   summarise(value = wquant(value, weight),
-            type = c("lower_lim", "median", "upper_lim")) 
-  
+            type = c("lower_lim", "median", "upper_lim"))
+
   saveRDS(summary_hindcast, fn)
 } else{
   summary_hindcast <- readRDS(fn)
@@ -1043,39 +1003,28 @@ if(!file.exists(fn)) {
 ```
 
 
-```{r}
-summary_hindcast %>% filter(var == "C") %>% 
-  pivot_wider(names_from = type, values_from = value) %>% 
+```{r GBM_inc_fit_g}
+summary_hindcast %>% filter(var == "C") %>%
+  pivot_wider(names_from = type, values_from = value) %>%
   ungroup() %>% mutate(week = 1:11)-> pred_inc
 
-g1 <- plot_wkl_fit(pred_inc, wkl_inc, y_lab = "Weekly incidence", 
+g1 <- plot_wkl_fit(pred_inc, wkl_inc, y_lab = "Weekly incidence",
                    "Incidence fit")
 ```
 
-```{r}
-summary_hindcast %>% filter(var == "Z") %>% 
-  pivot_wider(names_from = type, values_from = value) %>% 
+```{r GBM_mob_fit_g}
+summary_hindcast %>% filter(var == "Z") %>%
+  pivot_wider(names_from = type, values_from = value) %>%
   ungroup() %>% mutate(week = 1:11)-> pred_mob_effect
 
-g2 <- ggplot(pred_mob_effect, aes(x = week, y = median)) +
-  geom_point(data = wkl_df, aes(x = week, y = y2)) +
-  geom_line(colour = "steelblue") +
-  scale_y_continuous(labels = comma) +
-  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim), 
-              fill = "steelblue") +
-  scale_x_continuous(breaks = 1:11) +
-  theme_pubr() +
-  labs(y = "Mobility index", x = "Week",
-       title = "Mobility fit") +
-  theme(axis.title = element_text(size = 8, colour = "grey40"),
-        axis.text  = element_text(colour = "grey60", size = 6),
-        plot.title = element_text(size = 9, colour = "grey25"),
-        axis.ticks = element_line(colour = "grey60"))
+actual_mob <- wkl_df %>% rename(y = y2)
+
+g2 <- plot_wkl_fit(pred_mob_effect, actual_mob, "Mobility index", "Mobility fit")
 ```
 
-```{r}
-summary_hindcast %>% filter(var == "R") %>% 
-  pivot_wider(names_from = type, values_from = value) %>% 
+```{r GBM_R_prediction}
+summary_hindcast %>% filter(var == "R") %>%
+  pivot_wider(names_from = type, values_from = value) %>%
   ungroup() %>% mutate(week = 1:11)-> r_df
 
 ggplot(r_df, aes(x = week, y = median)) +
@@ -1093,29 +1042,11 @@ ggplot(r_df, aes(x = week, y = median)) +
 ```
 
 ```{r}
-summary_hindcast %>% filter(var == "Re") %>% 
-  pivot_wider(names_from = type, values_from = value) %>% 
+summary_hindcast %>% filter(var == "Re") %>%
+  pivot_wider(names_from = type, values_from = value) %>%
   ungroup() %>% mutate(week = 1:11)-> re_df
 
-ggplot(re_df, aes(x = week, y = median)) +
-  geom_hline(yintercept = 1, colour = "grey60", linetype = "dashed") +
-  geom_line(colour = "steelblue") +
-  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim),
-              fill = "steelblue") +
-  geom_vline(xintercept = 1.86, colour = "grey50", linetype = "dotted") +
-  annotate("text", x = 1.96, y = 6, size = 1.5,
-             label = "Delay phase", hjust = 0, size = 3, colour = "grey50") +
-  geom_vline(xintercept = 4, colour = "grey50", linetype = "dotted") +
-  annotate("text", x = 4.1, y = 6, size = 1.5,
-             label = "Stay at home", hjust = 0, size = 3, colour = "grey50") +
-  labs(y = parse(text = "Re[t]"), x = "Week",
-       title = "Effective reproductive number")+
-  scale_x_continuous(breaks = 1:11) +
-  theme_pubr()  +
-  theme(axis.title = element_text(size = 8, colour = "grey40"),
-        axis.text  = element_text(colour = "grey60", size = 6),
-        plot.title = element_text(size = 9, colour = "grey25"),
-        axis.ticks = element_line(colour = "grey60"))-> g4
+g4 <- plot_hidden_re(re_df)
 ```
 
 ```{r}
@@ -1123,11 +1054,18 @@ ggplot(re_df, aes(x = week, y = median)) +
 ```
 
 ```{r}
-results_list <- list(label   = "GBM",
-                     sim_inc = pred_inc,
-                     sim_mob = pred_mob_effect,
-                     R_t     = r_df,
-                     Re_t    = re_df)
+est_df <- surf_est %>% filter(name != "alpha" & name!= "tau") %>%
+  select(-method) %>%
+  rename(mean = mle,
+         lower_limit = ll,
+         upper_limit = ul)
+
+results_list <- list(label        = "GBM",
+                     sim_inc      = pred_inc,
+                     sim_mob      = pred_mob_effect,
+                     R_t          = r_df,
+                     Re_t         = re_df,
+                     estimates_df = est_df)
 
 fn <- file.path(folder, "predictions.rds")
 
@@ -1139,7 +1077,7 @@ if(!file.exists(fn)) saveRDS(results_list, fn)
 
 # Cox–Ingersoll–Ross
 
-```{r}
+```{r CIR}
 pomp_mdl <- NULL
 folder   <- "./Saved_objects/Irish_data/SEI3R_CIR/weekly/mdl_2"
 ```
@@ -1202,7 +1140,7 @@ folder   <- "./Saved_objects/Irish_data/SEI3R_CIR/weekly/mdl_2"
   y_2 \sim Normal(Z, \tau) 
 \end{equation}
 
-```{r}
+```{r CIR_setup}
 #===============================================================================
 # Model setup
 #===============================================================================
@@ -1350,6 +1288,7 @@ names(profile_list_CIR) <- names(par_obj$unknown)
 
 cutoff_list_CIR        <- profile_list_CIR
 
+unadjusted_profile_list <- profile_list_CIR
 mcap_list               <- profile_list_CIR
 ```
 
@@ -1439,8 +1378,6 @@ profile_list_CIR[[var_name]] <- prof_ll %>%
 
 profile_list_CIR[[var_name]] %>% 
   filter(loglik > max(loglik)- 20)-> all
-
-pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 ```
 
 ##### Profile likelihood
@@ -1448,15 +1385,15 @@ pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 \hfill
 
 ```{r}
-maxloglik                   <- max(profile_list_CIR[[var_name]]$loglik,
-                                   na.rm = TRUE)
+source("./R_scripts/profile_utils.R")
 
-cutoff_list_CIR[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
-```
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
 
-```{r, fig.height = 3.5}
-profile_plot(profile_list_CIR[[var_name]], var_name,
-             cutoff_list_CIR[[var_name]])
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff) -> g1
 ```
 
 ##### MCAP
@@ -1476,11 +1413,11 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-ggplot(prof_ll, aes(x = zeta, y = loglik)) +
-  geom_point(alpha = 0.7, colour = "grey50") +
-  geom_smooth(se = FALSE) +
-  geom_hline(yintercept = cut_off_smth, colour = "red", linetype = "dotted") +
-  theme_pubr()
+plot_MCAP(prof_ll, var_name) -> g2
+```
+
+```{r profile_zeta_CIR_g, fig.height =7}
+g1 / g2
 ```
 
 #### P(0)
@@ -1573,8 +1510,6 @@ profile_list_CIR[[var_name]] <- prof_ll %>%
 
 profile_list_CIR[[var_name]] %>% 
   filter(loglik > max(loglik, na.rm = TRUE) - 20)-> all
-
-pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 ```
 
 ##### Profile likelihood
@@ -1582,15 +1517,15 @@ pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 \hfill
 
 ```{r}
-maxloglik                   <- max(profile_list_CIR[[var_name]]$loglik,
-                                   na.rm = TRUE)
+source("./R_scripts/profile_utils.R")
 
-cutoff_list_CIR[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
-```
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
 
-```{r, fig.height = 3.5}
-profile_plot(profile_list_CIR[[var_name]], var_name,
-             cutoff_list_CIR[[var_name]])
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff) -> g1
 ```
 
 ##### MCAP
@@ -1612,11 +1547,11 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-ggplot(prof_ll, aes(x = P_0, y = loglik)) +
-  geom_point(alpha = 0.7, colour = "grey50") +
-  geom_smooth(se = FALSE, span = span) +
-  geom_hline(yintercept = cut_off_smth, colour = "red", linetype = "dotted") +
-  theme_pubr()
+plot_MCAP(prof_ll, var_name) -> g2
+```
+
+```{r profile_P_0_CIR_g, fig.height =7}
+g1 / g2
 ```
 
 #### $\alpha$ profile
@@ -1700,8 +1635,6 @@ profile_list_CIR[[var_name]] <- prof_ll %>%
 
 profile_list_CIR[[var_name]] %>% 
   filter(loglik > max(loglik) - 100)-> all
-
-pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 ```
 
 ##### Profile likelihood
@@ -1709,15 +1642,15 @@ pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 \hfill
 
 ```{r}
-maxloglik                   <- max(profile_list_CIR[[var_name]]$loglik,
-                                   na.rm = TRUE)
+source("./R_scripts/profile_utils.R")
 
-cutoff_list_CIR[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
-```
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
 
-```{r, fig.height = 3.5}
-profile_plot(profile_list_CIR[[var_name]], var_name,
-             cutoff_list_CIR[[var_name]])
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff) -> g1
 ```
 
 ##### MCAP
@@ -1739,11 +1672,11 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-ggplot(prof_ll, aes(x = alpha, y = loglik)) +
-  geom_point(alpha = 0.7, colour = "grey50") +
-  geom_smooth(se = FALSE, span = span) +
-  geom_hline(yintercept = cut_off_smth, colour = "red", linetype = "dotted") +
-  theme_pubr()
+plot_MCAP(prof_ll, var_name) -> g2
+```
+
+```{r profile_alpha_CIR_g, fig.height =7}
+g1 / g2
 ```
 
 
@@ -1830,8 +1763,6 @@ profile_list_CIR[[var_name]] <- prof_ll %>%
   mutate(profile_over = var_name)
 
 profile_list_CIR[[var_name]] -> all
-
-pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 ```
 
 ##### Profile likelihood
@@ -1839,21 +1770,16 @@ pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 \hfill
 
 ```{r}
-maxloglik                   <- max(profile_list_CIR[[var_name]]$loglik,
-                                   na.rm = TRUE)
+source("./R_scripts/profile_utils.R")
 
-cutoff_list_CIR[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
+
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff) -> g1
 ```
-
-```{r, fig.height = 3.5}
-profile_plot(profile_list_CIR[[var_name]], var_name,
-             cutoff_list_CIR[[var_name]])
-```
-
-
-##### MCAP
-
-\hfill
 
 ```{r}
 source("./R_scripts/mcap.R")
@@ -1870,7 +1796,11 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-plot_MCAP(prof_ll, var_name, span)
+plot_MCAP(prof_ll, var_name, span) -> g2
+```
+
+```{r profile_tau_CIR_g, fig.height =7}
+g1 / g2
 ```
 
 #### $\nu$ 
@@ -1884,7 +1814,7 @@ var_name <- "nu"
 ##### Raw likelihood
 
 ```{r}
-raw_likelihood(gr_CIR_df, "nu")
+raw_likelihood(gr_CIR_df, var_name)
 ```
 
 ##### Starting points
@@ -1960,8 +1890,6 @@ profile_list_CIR[[var_name]] <- prof_ll %>%
   mutate(profile_over = var_name)
 
 profile_list_CIR[[var_name]] %>% filter(loglik > max(loglik -100)) -> all
-
-pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 ```
 
 ##### Profile likelihood
@@ -1969,20 +1897,16 @@ pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 \hfill
 
 ```{r}
-maxloglik                   <- max(profile_list_CIR[[var_name]]$loglik,
-                                   na.rm = TRUE)
+source("./R_scripts/profile_utils.R")
 
-cutoff_list_CIR[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
+
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff) -> g1
 ```
-
-```{r, fig.height = 3.5}
-profile_plot(profile_list_CIR[[var_name]], var_name,
-             cutoff_list_CIR[[var_name]])
-```
-
-##### MCAP
-
-\hfill
 
 ```{r CIR_mcap_nu}
 source("./R_scripts/mcap.R")
@@ -1999,7 +1923,11 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-plot_MCAP(prof_ll, var_name, span)
+plot_MCAP(prof_ll, var_name, span) -> g2
+```
+
+```{r profile_nu_CIR_g, fig.height =7}
+g1 / g2
 ```
 
 #### $\upsilon$
@@ -2090,8 +2018,6 @@ profile_list_CIR[[var_name]] <- prof_ll %>%
   mutate(profile_over = var_name)
 
 profile_list_CIR[[var_name]] -> all
-
-pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 ```
 
 ##### Profile likelihood
@@ -2099,20 +2025,17 @@ pairs(~loglik + zeta + P_0 + tau + alpha + upsilon + nu, data = all, pch=16)
 \hfill
 
 ```{r}
-maxloglik                   <- max(profile_list_CIR[[var_name]]$loglik,
-                                   na.rm = TRUE)
+source("./R_scripts/profile_utils.R")
 
-cutoff_list_CIR[[var_name]] <- maxloglik - 0.5 * qchisq(df = 1,p = 0.95)
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
+
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff) -> g1
 ```
 
-```{r, fig.height = 3.5}
-profile_plot(profile_list_CIR[[var_name]], var_name,
-             cutoff_list_CIR[[var_name]])
-```
-
-##### MCAP
-
-\hfill
 
 ```{r CIR_mcap_upsilon}
 source("./R_scripts/mcap.R")
@@ -2129,7 +2052,11 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-plot_MCAP(prof_ll, var_name, span)
+plot_MCAP(prof_ll, var_name, span) -> g2
+```
+
+```{r profile_upsilon_CIR_g, fig.height =7}
+g1 / g2
 ```
 
 ### Estimates
@@ -2190,39 +2117,11 @@ knitr::kable(par_summary %>%
 
 \hfill
 
-```{r CIR_par_summary}
-source("./R_scripts/R_estimates.R")
-source("./R_scripts/par_summary.R")
+```{r CIR_unadjusted_profile_summary}
+source('./R_scripts/profile_utils.R')
 
-unk_names <- names(par_obj$unknown)
-
-prof_est_df <- do.call("bind_rows", profile_list_CIR) %>% 
-  filter(!is.na(loglik.se) & loglik.se < 1)
-
-par_lims    <- summarise_pars(unk_names, cutoff_list_CIR)
-
-prof_est_df %>% filter(loglik == max(loglik, na.rm = TRUE)) %>%
-  select(-loglik, -loglik.se, -profile_over) %>% unlist() -> mle_estimate
-
-MLE_df <- enframe(mle_estimate, name = "Parameter", value = "MLE") %>%
-  filter(Parameter %in% unk_names)
-
-par_summary <- left_join(MLE_df, par_lims, by = "Parameter")
-
-zeta_estimates <- par_summary %>% filter(Parameter == "zeta") %>% 
-  select(-Parameter) %>% unlist()
-
-R_estimates <- estimate_r(zeta_estimates) %>% bind_rows()
-R_row       <- data.frame(Parameter = "R(0)") %>% bind_cols(R_estimates)
-
-par_summary <- bind_rows(par_summary, R_row) %>% 
-  mutate(Parameter = ifelse(Parameter == "P_0", "P(0)", Parameter)) # formatting
-
-prof_est <- par_summary %>% rename(name = Parameter,
-                                   mle = MLE,
-                                   ll = lower_limit,
-                                   ul = upper_limit) %>% 
-  mutate(method = "Profile")
+par_summary <- get_par_summary(unadjusted_profile_list)
+prof_est    <- par_summary %>% mutate(method = "Profile")
 
 colnames(par_summary) <- c("Parameter", "MLE", "Lower limit", "Upper limit")
 
@@ -2235,27 +2134,10 @@ knitr::kable(par_summary %>% arrange(Parameter), "latex", booktabs = TRUE,
 \hfill
 
 ```{r CIR_MCAP_est}
-source("./R_scripts/R_estimates.R")
+source('./R_scripts/profile_utils.R')
 
-mcap_list <- compact(mcap_list)
-
-imap_dfr(mcap_list, function(vals_list, name) {
-  data.frame(name = name,
-             mle  = vals_list$mle,
-             ll = vals_list$ll,
-             ul = vals_list$ul) 
-}) -> par_summary
-
-zeta_estimates <- par_summary %>% filter(name == "zeta") %>% 
-  select(-name) %>% unlist()
-
-R_estimates <- estimate_r(zeta_estimates) %>% bind_rows()
-R_row       <- data.frame(name = "R(0)") %>% bind_cols(R_estimates)
-
-par_summary <- bind_rows(par_summary, R_row) %>% 
-  mutate(name = ifelse(name == "P_0", "P(0)", name)) # formatting
-
-mcap_est <- par_summary %>% mutate(method = "MCAP")
+par_summary <- get_par_summary(mcap_list)
+mcap_est    <- par_summary %>% mutate(method = "MCAP")
 
 colnames(par_summary) <- c("Parameter", "MLE", "Lower limit", "Upper limit")
 
@@ -2271,13 +2153,7 @@ knitr::kable(par_summary %>% arrange(Parameter), "latex", booktabs = TRUE,
 
 all_est <- rbind(surf_est, mcap_est, prof_est)
 
-ggplot(all_est, aes(x = method, y = mle)) +
-  geom_errorbar(aes(ymin = ll, ymax = ul, colour = method)) +
-  geom_point(aes(colour = method)) +
-  scale_colour_manual(values = c("#1D2F31", "#136AA0", "#C1A284")) +
-  facet_wrap(~name, labeller = label_parsed, scales = "free_y") +
-  theme_pubr() +
-  theme(legend.position = "none")
+par_comparison_stochastic(all_est)
 ```
 
 ### Fit & prediction of hidden states
@@ -2287,10 +2163,247 @@ ggplot(all_est, aes(x = method, y = mle)) +
 \hfill
 
 ```{r}
-mle_boundary <- prof_est_df %>% filter(loglik > max(loglik, na.rm = T)- 6)
+unk_par_MLE <- tidy_ll_surface %>% 
+  filter(loglik > max(loglik, na.rm = T)- 3.5) %>% 
+  pivot_wider(names_from = name, values_from = value) %>% 
+  select(-loglik, -`.id`)
 
-unk_par_MLE <- mle_boundary %>% select(unk_names)
+ggpairs(unk_par_MLE) + theme_pubclean()
+```
 
-ggpairs(unk_par_MLE) + theme_pubclean() +
-  theme(axis.text.x = element_text(size = 6))
+```{r}
+sapply(unk_par_MLE, function(col) {
+  min_col <- min(col)
+}) -> lower_lims
+
+sapply(unk_par_MLE, function(col) {
+  max_col <- max(col)
+}) -> upper_lims
+
+set.seed(722304622)
+
+params <- sobol_design(lower = lower_lims,
+                      upper = upper_lims,
+                      nseq  = 200)
+
+lapply(unk_par_MLE, function(col) {
+  range_col <- range(col)
+  
+  list(min = range_col[[1]],
+       max = range_col[[2]])
+}) -> lims
+```
+
+```{r}
+cor_m     <-cor(unk_par_MLE)
+cor_coefs <- cor_m[upper.tri(cor_m)]
+
+set.seed(172783321)
+
+n_unk <- ncol(unk_par_MLE)
+
+myCop <- normalCopula(param = cor_coefs, 
+                      dim = n_unk, dispstr = "un")
+
+myMvd <- mvdc(copula = myCop, margins = rep("unif", n_unk),
+              paramMargins = lims)
+
+params           <- rMvdc(200, myMvd) %>% data.frame()
+colnames(params) <- colnames(unk_par_MLE)
+
+plot(params)
+```
+
+
+
+```{r}
+source("./R_scripts/hindcast.R")
+fn          <- file.path(folder, "hindcast.rds" )
+
+results_obj <- hindcast(unk_pars_df = params,
+                        pomp_mdl = pomp_mdl,
+                        fixed_pars = par_obj$fixed,
+                        filename = fn,
+                        seed = 10092238,
+                        n_cores = 7,
+                        Np = 1e4)
+```
+
+
+In this graph, we explore the distribution of the log likelihood values for each
+starting coordinate at different cut-off points.
+
+```{r}
+# Compute boxplot statistics
+
+loglik_id <- results_obj$hindcast %>% group_by(id) %>% slice(1) %>%
+  ungroup() %>%
+  mutate(state = ifelse(loglik > max(loglik) - 20, "in", "out"))
+
+cutoff_vector <- c("1e1", "2e1", "5e1", "1e2", "5e2", "1e3")
+
+cutoffs <- factor(cutoff_vector, levels = cutoff_vector)
+
+df_list <- map(cutoffs, function(co) {
+  co_val <- as.numeric(as.character(co))
+  
+  df <- loglik_id %>% filter(loglik > max(loglik) - co_val) %>%
+  mutate(cutoff = co)
+  
+  stats <- boxplot.stats(df$loglik)$stats
+  bp_df <- data.frame(x = co, ymin=stats[1], lower=stats[2], middle=stats[3],
+                 upper=stats[4], ymax=stats[5])
+  
+  list(filtered_df = df,
+       bp_df       = bp_df)
+})
+
+df <- map_df(df_list, "filtered_df")
+
+bp <- map_df(df_list, "bp_df")
+```
+
+```{r, fig.height = 3.5}
+ggplot(df, aes(x = cutoff, y = loglik)) +
+  geom_boxplot(aes(group = cutoff), ) +
+  facet_wrap(~cutoff, scales = "free") +
+  theme_pubr()
+```
+
+
+Here we present the interquartile range for every cutoff
+
+```{r, fig.height = 3.5}
+ggplot(bp, aes(x = x, lower = lower, upper = upper, 
+               middle = middle, ymin = ymin,
+                    ymax = ymax)) +
+    geom_boxplot(stat="identity") +
+  theme_pubr()
+```
+
+Given the complexity of the CIR's likelihood surface, including all the results
+may bias the estimates towards regions of low probability, or even worse, 
+produce computation overflows.Thus, we choose a cutoff of 20 log likelihood units given that it contains ~ 80 % of all the starting points and appears to include only a few outliers. It can be seen that these *outliers* are concentrated on at the edges of the likelihood surface. This results highlight the complex surface created by this particular high-dimensional Partially Observed Markov Model.
+
+```{r}
+params %>% mutate(id = row_number()) %>%
+  left_join(loglik_id[, c("loglik", "id", "state")], by = "id") -> analysis_df
+
+ggpairs(analysis_df, columns = c(1:6, 9), 
+        aes(colour = state, fill = state), 
+        upper = list(continuous = "blank",
+                     combo      = "box")) +
+  scale_colour_manual(values = c("grey80", "#6B3B36")) +
+  scale_fill_manual(values = c("grey80", "#6B3B36")) +
+  theme_pubr()
+```
+
+```{r}
+out_df <- analysis_df %>% filter(state == "out") %>% 
+  select(-id, -loglik)
+
+unk_par_MLE %>% mutate(state = "surface") %>% 
+  bind_rows(out_df) %>% 
+  rename(`P(0)` = P_0)-> comparison_df
+
+ggpairs(comparison_df, aes(colour = state),
+        upper = list(continuous = "blank",
+                     combo      = "box"),
+        labeller = label_parsed) +
+  scale_colour_manual(values = c("#6B3B36", "grey80")) +
+  scale_fill_manual(values = c("#6B3B36", "grey80")) +
+  theme_pubr() +
+  theme(axis.text = element_text(size = 5))
+```
+
+
+```{r}
+source("./R_scripts/par_summary.R")
+
+hindcast_df <- results_obj$hindcast %>%
+  filter(loglik > max(loglik) - 20) %>% 
+  mutate(weight = exp(loglik - mean(loglik)))
+results_obj <- NULL
+gc()
+
+fn          <- file.path(folder, "summary_hindcast.rds" )
+
+if(!file.exists(fn)) {
+  summary_hindcast <- hindcast_df %>%  group_by(time, var) %>%
+  summarise(value = wquant(value, weight),
+            type = c("lower_lim", "median", "upper_lim"))
+
+  saveRDS(summary_hindcast, fn)
+} else{
+  summary_hindcast <- readRDS(fn)
+}
+```
+
+```{r}
+summary_hindcast %>% filter(var == "C") %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  ungroup() %>% mutate(week = 1:11)-> pred_inc
+
+g1 <- plot_wkl_fit(pred_inc, wkl_inc, y_lab = "Weekly incidence",
+                   "Incidence fit")
+```
+
+```{r}
+summary_hindcast %>% filter(var == "Z") %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  ungroup() %>% mutate(week = 1:11)-> pred_mob_effect
+
+actual_mob <- wkl_df %>% rename(y = y2)
+
+g2 <- plot_wkl_fit(pred_mob_effect, actual_mob, "Mobility index", "Mobility fit")
+```
+
+
+```{r CIR_R_prediction}
+summary_hindcast %>% filter(var == "R") %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  ungroup() %>% mutate(week = 1:11)-> r_df
+
+ggplot(r_df, aes(x = week, y = median)) +
+  geom_line(colour = "steelblue") +
+  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim),
+              fill = "steelblue") +
+  labs(y = parse(text = "R[t]"), x = "Week",
+       title = "Basic reproductive number")+
+  scale_x_continuous(breaks = 1:11) +
+  theme_pubr() +
+  theme(axis.title = element_text(size = 8, colour = "grey40"),
+        axis.text  = element_text(colour = "grey60", size = 6),
+        plot.title = element_text(size = 9, colour = "grey25"),
+        axis.ticks = element_line(colour = "grey60"))-> g3
+```
+
+```{r CIR_Re_prediction}
+summary_hindcast %>% filter(var == "Re") %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  ungroup() %>% mutate(week = 1:11)-> re_df
+
+g4 <- plot_hidden_re(re_df)
+```
+```{r}
+(g1 / g2) | (g3 / g4)
+```
+
+```{r}
+est_df <- surf_est %>% filter(name != "alpha" & name!= "tau") %>%
+  select(-method) %>%
+  rename(mean = mle,
+         lower_limit = ll,
+         upper_limit = ul)
+
+results_list <- list(label        = "CIR",
+                     sim_inc      = pred_inc,
+                     sim_mob      = pred_mob_effect,
+                     R_t          = r_df,
+                     Re_t         = re_df,
+                     estimates_df = est_df)
+
+fn <- file.path(folder, "predictions.rds")
+
+if(!file.exists(fn)) saveRDS(results_list, fn)
 ```
