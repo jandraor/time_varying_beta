@@ -19,7 +19,7 @@ loglik_df %>%
 set.seed(600014339)
 
 profile_design(
-  alpha   = seq(0, 0.4, length = 54),
+  alpha   = seq(0, 0.2, length = 54),
   lower = box[1, c("zeta" , "tau", "P_0", "nu", "upsilon")],
   upper = box[2, c("zeta", "tau", "P_0", "nu", "upsilon")],
   nprof = 15, type = "sobol"
