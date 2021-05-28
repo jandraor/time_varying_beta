@@ -19,10 +19,10 @@ loglik_df %>%
 set.seed(600014339)
 
 profile_design(
-  alpha   = seq(0, 0.4, length = 71),
+  alpha   = seq(0, 0.15, length = 40),
   lower = box[1, c("zeta" , "tau", "P_0", "nu", "upsilon")],
   upper = box[2, c("zeta", "tau", "P_0", "nu", "upsilon")],
-  nprof = 17, type = "sobol"
+  nprof = 30, type = "sobol"
 ) -> guesses_alpha
 
 ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, nu = 0.02,
