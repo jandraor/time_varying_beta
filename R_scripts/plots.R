@@ -211,8 +211,8 @@ profile_plot <- function(profile_df, prof_var, maxloglik, ci_cutoff) {
     theme_pubr()
 }
 
-plot_guesses <- function(guesses_df) {
-  aes_points <- list(continuous = wrap("points", alpha = 0.5, size = 1,
+plot_guesses <- function(guesses_df, point_size = 1) {
+  aes_points <- list(continuous = wrap("points", alpha = 0.5, size = point_size,
                                        colour = "steelblue"))
   
   guesses_df <- rename(guesses_df, `P(0)` = `P_0`)

@@ -1583,14 +1583,17 @@ loglik_df %>%
 set.seed(600014339)
 
 profile_design(
-  alpha   = seq(0, 0.4,length = 40),
+  alpha   = seq(0, 0.20,length = 50),
   lower = box[1, c("zeta" , "tau", "P_0", "nu", "upsilon")],
   upper = box[2, c("zeta", "tau", "P_0", "nu", "upsilon")],
-  nprof = 20, type = "sobol"
+  nprof = 30, type = "sobol"
 ) -> guesses_alpha
-
-plot(guesses_alpha, cex = 0.25, pch = 16)
 ```
+
+```{r}
+plot_guesses(guesses_alpha, 0.5)
+```
+
 
 ```{r}
 ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, nu = 0.02,
@@ -1660,7 +1663,7 @@ profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
 ```{r}
 source("./R_scripts/mcap.R")
 
-span = 0.5
+span <- 0.75
 
 mcap_obj <- mcap(prof_ll$loglik, prof_ll[[var_name]], lambda = span)
 
@@ -1672,7 +1675,7 @@ mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
                               ul  = mcap_obj$ci[[2]],
                               mle = mcap_obj$mle)
 
-plot_MCAP(prof_ll, var_name) -> g2
+plot_MCAP(prof_ll, var_name, span) -> g2
 ```
 
 ```{r profile_alpha_CIR_g, fig.height =7}
@@ -1784,7 +1787,7 @@ profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
 ```{r}
 source("./R_scripts/mcap.R")
 
-span = 0.75
+span <- 0.75
 
 mcap_obj <- mcap(prof_ll$loglik, prof_ll[[var_name]], lambda = span)
 
@@ -1830,10 +1833,10 @@ loglik_df %>%
 set.seed(363292494)
 
 profile_design(
-  nu   = seq(0, 0.5,length = 40),
+  nu   = seq(0, 0.5,length = 50),
   lower = box[1, c("zeta" , "alpha", "P_0", "tau", "upsilon")],
   upper = box[2, c("zeta", "alpha", "P_0", "tau", "upsilon")],
-  nprof = 20, type = "sobol"
+  nprof = 30, type = "sobol"
 ) -> guesses_nu
 ```
 
@@ -2225,8 +2228,7 @@ results_obj <- hindcast(unk_pars_df = params,
                         fixed_pars = par_obj$fixed,
                         filename = fn,
                         seed = 10092238,
-                        n_cores = 7,
-                        Np = 1e4)
+                        n_cores = 7)
 ```
 
 
