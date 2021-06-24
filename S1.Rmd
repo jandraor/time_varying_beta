@@ -1711,10 +1711,10 @@ loglik_df %>%
 set.seed(358559280)
 
 profile_design(
-  tau   = seq(0, 0.50,length = 40),
+  tau   = seq(0, 0.50,length = 50),
   lower = box[1, c("zeta" , "alpha", "P_0", "nu", "upsilon")],
   upper = box[2, c("zeta", "alpha", "P_0", "nu", "upsilon")],
-  nprof = 20, type = "sobol"
+  nprof = 30, type = "sobol"
 ) -> guesses_tau
 ```
 
