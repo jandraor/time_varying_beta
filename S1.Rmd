@@ -1960,10 +1960,10 @@ loglik_df %>%
 set.seed(300038986)
 
 profile_design(
-  upsilon   = seq(0, 1,length = 40),
+  upsilon   = seq(0, 1,length = 50),
   lower     = box[1, c("zeta" , "alpha", "P_0", "tau", "nu")],
   upper     = box[2, c("zeta", "alpha", "P_0", "tau", "nu")],
-  nprof     = 20, type = "sobol"
+  nprof     = 30, type = "sobol"
 ) -> guesses_upsilon
 ```
 
