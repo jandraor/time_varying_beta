@@ -1,0 +1,81 @@
+---
+title: "GBM_immi"
+author: "Jair Andrade"
+date: "7/5/2021"
+output: pdf_document
+---
+
+# Data
+
+## Incidence data
+
+```{r}
+source("./R_scripts/irish_data.R")
+
+irish_data   <- get_irish_data()
+total_cases  <- sum(irish_data$y)
+formatted_tc <- format(total_cases, big.mark = ",")
+
+wkl_inc <- irish_data %>% slice(1:77)%>%
+  mutate(week = ((time - 1) %/% 7) + 1) %>% 
+  group_by(week) %>% summarise(y = sum(y)) %>% 
+  mutate(time = week * 7)
+```
+
+```{r}
+source("./R_scripts/plots.R")
+incidence_graphs(irish_data, formatted_tc, wkl_inc)
+```
+
+
+## Apple mobility
+
+```{r}
+source("./R_scripts/apple.R")
+
+drv_data_obj <- get_driving_data()
+imp <- drv_data_obj$imputed_data
+
+wkl_df <- wkl_inc %>% rename(y1 = y) %>% 
+  mutate(y2 = imp[1:length(imp) %% 7 == 0])
+```
+
+```{r, fig.height = 3.5}
+driving_missing_data(drv_data_obj$raw_data)
+```
+
+```{r, fig.height= 3.5}
+imputed_driving_data(drv_data_obj$raw_data,
+                     drv_data_obj$imputed_data)
+```
+
+\newpage
+
+# Geometric Brownian Motion (GBM) 
+
+```{r}
+#===============================================================================
+# Model setup
+#===============================================================================
+folder <- "./Saved_objects/Irish_data/SEI3R_GBM/mdl_3" # includes immigration
+source("./R_scripts/POMP_models.R")
+
+par_obj      <- get_params("GBM_3")
+params       <- par_obj$all
+fixed_params <- par_obj$fixed
+pomp_mdl     <- pomp_SEI3R_GBM_immi(wkl_df, params, 1 / 128)
+```
+
+## Likelihood variance test
+
+```{r, GBM_3_test_lik_var}
+source("./R_scripts/likelihood_funs.R")
+source("./R_scripts/helpers.R")
+
+fn <- file.path(folder, "pf_sensitivity.rds") # particle filter sensitivity
+n_particles  <- c(5e3, 1e4, 2e4, 5e4, 1e5, 2e5, 5e5, 1e6)
+sens_results <- pf_sensitivity(n_particles = n_particles, n_cores = 7, 
+                               seed = 904296127, pomp_mdl = pomp_mdl, fn = fn,
+                               n_iter = 14)
+```
+
