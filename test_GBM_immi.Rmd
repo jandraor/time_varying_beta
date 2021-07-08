@@ -5,6 +5,26 @@ date: "7/5/2021"
 output: pdf_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE,
+                      warning = FALSE)
+
+library(doParallel)
+library(doRNG)
+library(dplyr)
+library(imputeTS)
+library(lubridate)
+library(pomp)
+library(purrr)
+library(readr)
+library(readxl)
+library(stringr)
+library(tictoc)
+library(tidyr)
+
+source("./R_scripts/plots.R")
+```
+
 # Data
 
 ## Incidence data
@@ -79,3 +99,208 @@ sens_results <- pf_sensitivity(n_particles = n_particles, n_cores = 7,
                                n_iter = 14)
 ```
 
+```{r, fig.height = 3}
+source("./R_scripts/plots.R")
+loglik_se_sens(sens_results)
+```
+
+## Inference
+
+### Local search (Single guess)
+
+\hfill
+
+By applying iterated filtering, we search for maximum likelihood estimates from
+a single guess for each unknown parameter. We repeat this process
+**twenty** times.
+
+```{r}
+source("./R_scripts/local_search.R")
+ptb    <- rw.sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, alpha = 0.02,
+                iota = 0.02)
+fn     <- file.path(folder, "local_search.rds")
+ls_obj <- local_search(pomp_mdl, params, ptb, fn, 835816535, 7)
+```
+
+```{r}
+mifs_local <- ls_obj$result
+
+mifs_local %>%
+  traces() %>%
+  melt() -> traces_df 
+
+mif_traces(traces_df, names(par_obj$unknown))
+```
+
+```{r, fig.height = 3}
+loglik_traces(traces_df, c(-200, 0))
+```
+
+#### Likelihood
+
+\hfill
+
+To the parameter estimates found in the previous local search, we estimate their likelihood via particle filtering.
+
+```{r}
+source("./R_scripts/likelihood_funs.R")
+fn <- file.path(folder, "local_search_ll.rds")
+
+ll_local_search_obj <- mif_ll(mifs_local, seed = 627943112, n_cores = 7,
+                              filename = fn)
+```
+
+```{r, message = TRUE}
+source("./R_scripts/helpers.R")
+
+ls_loglik_df <- extract_ll_df(ll_local_search_obj) %>% 
+  filter(loglik > max(loglik) - 100) %>% 
+  filter(loglik.se < 1)
+
+
+pairs(~loglik+zeta + P_0 + alpha + tau + iota,
+      data = ls_loglik_df, pch=16)
+```
+
+### Global search by iterated filtering
+
+\hfill
+
+```{r, message = FALSE}
+mf1          <- ls_obj$result[[1]] 
+fixed_params <- par_obj$fixed      
+
+set.seed(87629711)
+
+runif_design(
+  lower = c(zeta = 0.1, P_0 = 1,  tau = 0.05, alpha = 0.05, iota = 0),
+  upper = c(zeta = 3,   P_0 = 30, tau = 3, alpha = 0.3, iota = 10),
+  nseq  = 300
+) -> guesses
+
+fn     <- file.path(folder, "Global_search.rds")
+seed   <- 19631106
+source("./R_scripts/global_search.R")
+gs_obj <- global_search(guesses, fixed_params, mf1, fn, seed, 7)
+```
+
+```{r, message = FALSE}
+mifs_global <- extract_mif_results(gs_obj)
+
+mifs_global %>% 
+  traces() %>%
+  melt() -> traces_df 
+
+mif_traces(traces_df, names(par_obj$unknown))
+```
+
+```{r, fig.height = 3}
+source("./R_scripts/plots.R")
+loglik_traces(traces_df, c(-200, 0))
+```
+
+#### Likelihood
+
+\hfill
+
+To the parameter estimates found in the previous **global search**, we estimate their likelihood via particle filtering.
+
+```{r}
+source("./R_scripts/likelihood_funs.R")
+fn          <- file.path(folder, "Global_search_ll.rds" )
+ll_obj      <- mif_ll(mifs_global, Np = 100000, 920499408, 
+                      n_cores = 7, fn)
+```
+
+```{r, message = FALSE, fig.height = 4.5, fig.width = 6, fig.align = 'center'}
+source("./R_scripts/helpers.R")
+
+loglik_df <- extract_ll_df(ll_obj)
+
+loglik_df %>% 
+  filter(loglik > max(loglik)- 20, loglik.se < 2) %>%
+  bind_rows(guesses) %>%
+  mutate(type=if_else(is.na(loglik),"guess","result")) %>%
+  arrange(type) -> guess_result_df
+
+pairs(~loglik + zeta + P_0 + tau + alpha + iota, data = guess_result_df,
+      col=ifelse(guess_result_df$type == "guess", grey(0.5),"red"),pch = 16,
+      cex = 0.5,
+      labels =c("Log lik", expression(zeta), "P_0", expression(tau),
+                expression(alpha), expression(iota)))
+```
+
+### Profiles
+
+To estimate confidence intervals, we employ the profile likelihood method.
+
+```{r}
+profile_list_GBM        <- vector(mode = "list", 
+                                  length = length(par_obj$unknown))
+
+unk_names               <- names(par_obj$unknown)
+names(profile_list_GBM) <- unk_names 
+
+unadjusted_profile_list <- profile_list_GBM
+mcap_list               <- profile_list_GBM
+```
+
+\newpage
+
+#### $\zeta$
+
+\hfill
+
+```{r GBM_zeta}
+#===============================================================================
+var_name <- "zeta"
+#===============================================================================
+```
+
+```{r}
+raw_likelihood(guess_result_df, var_name)
+```
+
+##### Starting points
+
+\hfill
+
+
+```{r, fig.height = 4, fig.width = 4.5, fig.align = 'center'}
+loglik_df %>% 
+  filter(loglik > max(loglik)- 20, loglik.se < 2) %>%
+  sapply(range) -> box
+
+set.seed(167826283)
+
+other_pars <- unk_names[unk_names != var_name]
+
+profile_design(
+  zeta  = seq(0.4, 2,length = 50),
+  lower = box[1, other_pars],
+  upper = box[2, other_pars],
+  nprof = 30, type = "sobol"
+) -> guesses
+```
+
+```{r}
+plot_guesses(guesses)
+```
+
+##### Profile traces
+
+\hfill
+
+```{r}
+source("./R_scripts/likelihood_funs.R")
+zeta_ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, alpha = 0.02, iota = 0.02)
+
+fn_ifp     <- file.path(folder, "ifp_zeta.rds" )
+
+ifp_obj <- iter_filt_profile(mf1 = mf1, 
+                             guesses = guesses,
+                             fixed_params = fixed_params,
+                             perturbations = zeta_ptb,
+                             filename = fn_ifp,
+                             seed = 105449832)
+```
