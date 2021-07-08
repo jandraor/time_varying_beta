@@ -83,6 +83,7 @@ source("./R_scripts/POMP_models.R")
 par_obj      <- get_params("GBM_3")
 params       <- par_obj$all
 fixed_params <- par_obj$fixed
+unk_names    <- names(par_obj$unknown)
 pomp_mdl     <- pomp_SEI3R_GBM_immi(wkl_df, params, 1 / 128)
 ```
 
