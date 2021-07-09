@@ -305,3 +305,13 @@ ifp_obj <- iter_filt_profile(mf1 = mf1,
                              filename = fn_ifp,
                              seed = 105449832)
 ```
+
+```{r, message = FALSE, fig.height = 3.5}
+profile_mif_results <- extract_mif_results(ifp_obj)
+
+profile_mif_results %>% 
+  traces() %>%
+  melt() -> traces_zeta_df 
+
+mif_traces(traces_zeta_df, unk_names)
+```
