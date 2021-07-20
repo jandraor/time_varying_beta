@@ -16,7 +16,7 @@ summarise_pars <- function(par_names, cutoff_list) {
 
 ## Taken from 'add reference'
 ## Weighted quantile function
-wquant <- function (x, weights, probs = c(0.025,0.5,0.975)) {
+wquant <- function (x, weights, probs = c(0.025,0.25, 0.5, 0.75, 0.975)) {
   idx <- order(x)
   x <- x[idx]
   weights <- weights[idx]
@@ -24,4 +24,3 @@ wquant <- function (x, weights, probs = c(0.025,0.5,0.975)) {
   rval <- approx(w,x,probs,rule=1)
   rval$y
 }
-

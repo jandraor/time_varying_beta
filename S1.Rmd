@@ -35,19 +35,31 @@ library(tidyr)
 ```{r}
 source("./R_scripts/irish_data.R")
 
-irish_data   <- get_irish_data()
+irish_data   <- get_irish_data() %>% slice(1:77)
 total_cases  <- sum(irish_data$y)
 formatted_tc <- format(total_cases, big.mark = ",")
 
-wkl_inc <- irish_data %>% slice(1:77)%>%
+wkl_inc <- irish_data %>%
   mutate(week = ((time - 1) %/% 7) + 1) %>% 
   group_by(week) %>% summarise(y = sum(y)) %>% 
   mutate(time = week * 7)
 ```
 
-```{r}
+```{r, fig.width = 5, fig.height = 6}
 source("./R_scripts/plots.R")
-incidence_graphs(irish_data, formatted_tc, wkl_inc)
+
+g1 <- daily_epicurve(irish_data, formatted_tc)
+g2 <- daily_epi_trend(irish_data)
+g3 <- weekly_epicurve(wkl_inc)
+
+layout <- "
+AA##
+AACC
+BBCC
+BB##
+"
+
+g1 + g2 + g3 + plot_layout(design = layout)
 ```
 
 
@@ -58,6 +70,9 @@ source("./R_scripts/apple.R")
 
 drv_data_obj <- get_driving_data()
 imp <- drv_data_obj$imputed_data
+
+dates        <- seq(ymd('2020-02-29'), ymd("2020-05-17"), by = '1 day')
+daily_mob_df <- data.frame(date = dates, y = imp)
 
 wkl_df <- wkl_inc %>% rename(y1 = y) %>% 
   mutate(y2 = imp[1:length(imp) %% 7 == 0])
@@ -71,6 +86,18 @@ driving_missing_data(drv_data_obj$raw_data)
 imputed_driving_data(drv_data_obj$raw_data,
                      drv_data_obj$imputed_data)
 ```
+
+
+```{r}
+g4 <- plot_daily_mobility(daily_mob_df)
+g2 + g4 + g3 + plot_layout(design = layout)
+
+fig_path <- str_glue("./paper_plots/Fig_01_Data.pdf")
+
+ggsave(fig_path, plot = g2 + g4 + g3 + plot_layout(design = layout),
+       height = 6, width = 5)
+```
+
 
 \newpage
 
@@ -245,7 +272,7 @@ ls_loglik_df <- extract_ll_df(ll_local_search_obj) %>%
 
 
 pairs(~loglik+zeta + P_0 + alpha + tau,
-      data = ls_loglik_df, pch=16)
+      data = ls_loglik_df, pch = 16)
 ```
 
 ### Global search by iterated filtering
@@ -316,7 +343,7 @@ loglik_df %>%
 pairs(~loglik + zeta + P_0 + tau + alpha, data = guess_result_df,
       col=ifelse(guess_result_df$type == "guess", grey(0.5),"red"),pch = 16,
       cex = 0.5,
-      labels =c("Log lik", expression(zeta), "P_0", expression(tau),
+      labels =c("Log lik", expression(zeta), "P(0)", expression(tau),
                 expression(alpha)))
 ```
 
@@ -897,6 +924,28 @@ knitr::kable(par_summary %>%
 ```
 
 
+```{r GBM_demo}
+mle_vector <- deframe(mle[, c("name", "value")])
+n_demo <- 200
+
+init_df <- data.frame(.id = 1:n_demo, week = 0, beta = mle_vector[["zeta"]])
+
+set.seed(261483779)
+
+pomp::simulate(pomp_mdl, params = c(par_obj$fixed, mle_vector),
+                       nsim = n_demo) %>% as.data.frame() %>% 
+  select(.id, time, Z) %>% 
+  mutate(beta = Z * mle_vector[["zeta"]],
+         week = time / 7) %>% 
+  select(-Z, - time) %>% 
+  bind_rows(init_df) %>% 
+  mutate(highlight = ifelse(.id == 100, TRUE, FALSE)) %>% 
+  arrange(.id, week) -> demo_GBM
+
+g_demo_GBM <- plot_demo(demo_GBM, "A) Geometric Brownian Motion (GBM)")
+```
+
+
 #### From likelihood profiles
 
 \hfill
@@ -981,7 +1030,7 @@ fn          <- file.path(folder, "hindcast.rds" )
 results_obj <- hindcast(params, pomp_mdl, par_obj$fixed, fn, 161401295, 7)
 ```
 
-```{r}
+```{r GBM_pred_summary}
 source("./R_scripts/par_summary.R")
 
 hindcast_df <- results_obj$hindcast %>%
@@ -994,7 +1043,7 @@ fn          <- file.path(folder, "summary_hindcast.rds" )
 if(!file.exists(fn)) {
   summary_hindcast <- hindcast_df %>%  group_by(time, var) %>%
   summarise(value = wquant(value, weight),
-            type = c("lower_lim", "median", "upper_lim"))
+            type = c("q2.5", "q25", "q50", "q75", "q97.5"))
 
   saveRDS(summary_hindcast, fn)
 } else{
@@ -1009,7 +1058,16 @@ summary_hindcast %>% filter(var == "C") %>%
   ungroup() %>% mutate(week = 1:11)-> pred_inc
 
 g1 <- plot_wkl_fit(pred_inc, wkl_inc, y_lab = "Weekly incidence",
-                   "Incidence fit")
+                   "A) Predicted incidence compared to incidence data",
+                   shape = 18)
+```
+
+```{r GBM_C_filt_dist}
+source("./R_scripts/filt_dist_utils.R")
+
+samples_C_df <- sample_filt_dist("C", hindcast_df, 383130843)
+g1b          <- plot_filt_dist(samples_C_df, wkl_inc, 
+                               y_label = "Weekly incidence")
 ```
 
 ```{r GBM_mob_fit_g}
@@ -1019,26 +1077,19 @@ summary_hindcast %>% filter(var == "Z") %>%
 
 actual_mob <- wkl_df %>% rename(y = y2)
 
-g2 <- plot_wkl_fit(pred_mob_effect, actual_mob, "Mobility index", "Mobility fit")
+g2 <- plot_wkl_fit(pred_mob_effect, actual_mob, "Relative contact rate", 
+                   "B) Relative contact rate compared to Apple's mobility index",
+                   shape = 16)
 ```
 
-```{r GBM_R_prediction}
-summary_hindcast %>% filter(var == "R") %>%
-  pivot_wider(names_from = type, values_from = value) %>%
-  ungroup() %>% mutate(week = 1:11)-> r_df
+```{r}
+source("./R_scripts/filt_dist_utils.R")
 
-ggplot(r_df, aes(x = week, y = median)) +
-  geom_line(colour = "steelblue") +
-  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim),
-              fill = "steelblue") +
-  labs(y = parse(text = "R[t]"), x = "Week",
-       title = "Basic reproductive number")+
-  scale_x_continuous(breaks = 1:11) +
-  theme_pubr() +
-  theme(axis.title = element_text(size = 8, colour = "grey40"),
-        axis.text  = element_text(colour = "grey60", size = 6),
-        plot.title = element_text(size = 9, colour = "grey25"),
-        axis.ticks = element_line(colour = "grey60"))-> g3
+samples_Z_df <- sample_filt_dist("Z", hindcast_df, 582449113)
+```
+
+```{r}
+plot_filt_dist(samples_Z_df, actual_mob, "Relative contact rate") -> g2b
 ```
 
 ```{r}
@@ -1046,11 +1097,25 @@ summary_hindcast %>% filter(var == "Re") %>%
   pivot_wider(names_from = type, values_from = value) %>%
   ungroup() %>% mutate(week = 1:11)-> re_df
 
-g4 <- plot_hidden_re(re_df)
+g3 <- plot_hidden_re(re_df)
+```
+
+```{r GBM_re_samples}
+source("./R_scripts/filt_dist_utils.R")
+
+samples_Re_df <- sample_filt_dist("Re", hindcast_df, 279575935)
 ```
 
 ```{r}
-(g1 / g2) | (g3 / g4)
+plot_filt_dist_re(samples_Re_df, wkl_inc) -> g3b
+```
+
+```{r}
+fig_path <- "./paper_plots/Fig_03_GBM.pdf"
+
+ggsave(fig_path, 
+       plot = (g1 | g1b) / (g2 | g2b) / (g3 | g3b), dpi = "print",
+       height = 7, width = 5)
 ```
 
 ```{r}
@@ -1063,7 +1128,6 @@ est_df <- surf_est %>% filter(name != "alpha" & name!= "tau") %>%
 results_list <- list(label        = "GBM",
                      sim_inc      = pred_inc,
                      sim_mob      = pred_mob_effect,
-                     R_t          = r_df,
                      Re_t         = re_df,
                      estimates_df = est_df)
 
@@ -2116,6 +2180,30 @@ knitr::kable(par_summary %>%
              digits = 2)
 ```
 
+```{r CIR_demo}
+mle_vector <- deframe(mle[, c("name", "value")])
+n_demo <- 200
+
+init_df <- data.frame(.id = 1:n_demo, week = 0, beta = mle_vector[["zeta"]])
+
+set.seed(562808458)
+
+pomp::simulate(pomp_mdl, params = c(par_obj$fixed, mle_vector),
+                       nsim = n_demo) %>% as.data.frame() %>% 
+  select(.id, time, Z) %>% 
+  mutate(beta = Z * mle_vector[["zeta"]],
+         week = time / 7) %>% 
+  select(-Z, - time) %>% 
+  bind_rows(init_df) %>% 
+  mutate(highlight = ifelse(.id == 100, TRUE, FALSE)) %>% 
+  arrange(.id, week) -> demo_CIR
+
+g_demo_CIR <- plot_demo(demo_CIR, "B) Cox-Ingersoll-Ross (CIR)")
+
+ggsave("./paper_plots/Fig_02_Simulations.pdf", 
+       plot = g_demo_GBM / g_demo_CIR, height = 7, width = 5)
+```
+
 #### From likelihood profiles
 
 \hfill
@@ -2267,7 +2355,7 @@ bp <- map_df(df_list, "bp_df")
 
 ```{r, fig.height = 3.5}
 ggplot(df, aes(x = cutoff, y = loglik)) +
-  geom_boxplot(aes(group = cutoff), ) +
+  geom_violin(aes(group = cutoff), ) +
   facet_wrap(~cutoff, scales = "free") +
   theme_pubr()
 ```
@@ -2319,7 +2407,7 @@ ggpairs(comparison_df, aes(colour = state),
 ```
 
 
-```{r}
+```{r CIR_pred_summary}
 source("./R_scripts/par_summary.R")
 
 hindcast_df <- results_obj$hindcast %>%
@@ -2333,7 +2421,7 @@ fn          <- file.path(folder, "summary_hindcast.rds" )
 if(!file.exists(fn)) {
   summary_hindcast <- hindcast_df %>%  group_by(time, var) %>%
   summarise(value = wquant(value, weight),
-            type = c("lower_lim", "median", "upper_lim"))
+            type = c("q2.5", "q25", "q50", "q75", "q97.5"))
 
   saveRDS(summary_hindcast, fn)
 } else{
@@ -2347,7 +2435,15 @@ summary_hindcast %>% filter(var == "C") %>%
   ungroup() %>% mutate(week = 1:11)-> pred_inc
 
 g1 <- plot_wkl_fit(pred_inc, wkl_inc, y_lab = "Weekly incidence",
-                   "Incidence fit")
+                   "Incidence fit", shape = 18)
+```
+
+```{r CIR_C_filt_dist}
+source("./R_scripts/filt_dist_utils.R")
+
+samples_C_df <- sample_filt_dist("C", hindcast_df, 135117983)
+g1b          <- plot_filt_dist(samples_C_df, wkl_inc, 
+                               y_label = "Weekly incidence")
 ```
 
 ```{r}
@@ -2357,38 +2453,41 @@ summary_hindcast %>% filter(var == "Z") %>%
 
 actual_mob <- wkl_df %>% rename(y = y2)
 
-g2 <- plot_wkl_fit(pred_mob_effect, actual_mob, "Mobility index", "Mobility fit")
+g2 <- plot_wkl_fit(pred_mob_effect, actual_mob, "Mobility index", "Mobility fit",
+                   shape = 16)
 ```
 
+```{r CIR_Z_filt_dist}
+source("./R_scripts/filt_dist_utils.R")
 
-```{r CIR_R_prediction}
-summary_hindcast %>% filter(var == "R") %>%
-  pivot_wider(names_from = type, values_from = value) %>%
-  ungroup() %>% mutate(week = 1:11)-> r_df
-
-ggplot(r_df, aes(x = week, y = median)) +
-  geom_line(colour = "steelblue") +
-  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim),
-              fill = "steelblue") +
-  labs(y = parse(text = "R[t]"), x = "Week",
-       title = "Basic reproductive number")+
-  scale_x_continuous(breaks = 1:11) +
-  theme_pubr() +
-  theme(axis.title = element_text(size = 8, colour = "grey40"),
-        axis.text  = element_text(colour = "grey60", size = 6),
-        plot.title = element_text(size = 9, colour = "grey25"),
-        axis.ticks = element_line(colour = "grey60"))-> g3
+samples_Z_df <- sample_filt_dist("Z", hindcast_df, 135117983)
+g2b          <- plot_filt_dist(samples_Z_df, actual_mob, 
+                               y_label = "Z(t)")
 ```
+
 
 ```{r CIR_Re_prediction}
 summary_hindcast %>% filter(var == "Re") %>%
   pivot_wider(names_from = type, values_from = value) %>%
   ungroup() %>% mutate(week = 1:11)-> re_df
 
-g4 <- plot_hidden_re(re_df)
+g3 <- plot_hidden_re(re_df)
 ```
+
+
+```{r CIR_Re_filt_dist}
+source("./R_scripts/filt_dist_utils.R")
+
+samples_Re_df <- sample_filt_dist("Re", hindcast_df, 101903287)
+g3b <- plot_filt_dist_re(samples_Re_df, wkl_inc) 
+```
+
+
+
 ```{r}
-(g1 / g2) | (g3 / g4)
+ggsave("./paper_plots/Fig_04_CIR.pdf", 
+       plot = (g1 | g1b) / (g2 | g2b) / (g3 | g3b), 
+       height = 7, width = 5)
 ```
 
 ```{r}
@@ -2401,7 +2500,6 @@ est_df <- surf_est %>% filter(name != "alpha" & name!= "tau") %>%
 results_list <- list(label        = "CIR",
                      sim_inc      = pred_inc,
                      sim_mob      = pred_mob_effect,
-                     R_t          = r_df,
                      Re_t         = re_df,
                      estimates_df = est_df)
 

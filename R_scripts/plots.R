@@ -58,6 +58,7 @@ daily_epicurve <- function(irish_data, formatted_tc) {
 }
 
 daily_epi_trend <- function(irish_data) {
+  
   ggplot(irish_data, aes(x = date, y = y)) +
     geom_vline(xintercept = as_date("2020-02-29") + 13, colour = "grey50",
                linetype = "dotted") +
@@ -69,28 +70,30 @@ daily_epi_trend <- function(irish_data) {
              label = "Stay at home", hjust = 0, size = 3, colour = "grey50") +
     labs(x = "Date of Lab specimen collection",
          y = "Incidence [new cases per day]",
-         title = "Trend") +
-    geom_point(colour = "steelblue") +
-    stat_smooth(se = FALSE, span = 0.25, colour = "lightskyblue3") +
-    theme_pubclean() +
+         title = "A) Daily detected cases") +
+    geom_point(colour = "#194973", size = 0.75, shape = 18, alpha = 0.95) +
+    geom_line(stat="smooth", method = "loess", formula = y ~ x, alpha = 0.25,
+              colour = "#194973", span = 0.25, size = 1) +
+    theme_pubr() +
     theme(axis.title = element_text(size = 8, colour = "grey40"),
           axis.text  = element_text(colour = "grey60", size = 6),
-          plot.title = element_text(size = 9, colour = "grey39"),
-          axis.ticks = element_line(colour = "grey60"))
+          plot.title = element_text(size = 9, colour = "grey10"),
+          axis.ticks = element_line(colour = "grey60"),
+          axis.line =  element_line(colour = "grey60"))
 }
 
 weekly_epicurve <- function(wkl_data) {
   ggplot(wkl_data, aes(x = week, y = y)) +
-    geom_col(fill = "steelblue") +
+    geom_col(fill = "#194973") +
     scale_x_continuous(breaks = 0:12) +
     theme_pubclean() +
     labs(y = "Incidence [new cases per week]",
          x = "Week of Lab specimen collection",
-         title = "Weekly epicurve") +
+         title = "C) Weekly detected cases") +
   theme_pubr() +
-    theme(plot.title = element_text(size = 9, colour = "grey39"),
+    theme(plot.title = element_text(size = 9),
           axis.line  = element_line(colour = "grey80"),
-          axis.text  = element_text(colour = "grey60"),
+          axis.text  = element_text(colour = "grey60", size = 7),
           axis.ticks = element_line(colour = "grey60"),
           axis.title = element_text(size = 8, colour = "grey40"))
 }
@@ -119,6 +122,30 @@ imputed_driving_data <- function(raw_data, imputed_data) {
          caption = "Missing data has been replaced by linear interpolation estimates") +
     theme_pubclean() +
     theme(plot.caption = element_text(colour = "grey70"))
+}
+
+plot_daily_mobility <- function(daily_mob_df) {
+  
+  daily_mob_df <- daily_mob_df %>% 
+    mutate(time        = row_number(),
+           end_of_week = ifelse(time %% 7 == 0, TRUE, FALSE)) %>% 
+    filter(time <= 77)
+  
+  ggplot(daily_mob_df, aes(x = date, y = y)) +
+    geom_point(colour = "#194973", aes(alpha = end_of_week), size = 0.5)   +
+    scale_alpha_manual(values = c(0.25, 1)) +
+    geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.1,
+              colour = "#194973", span = 0.25, size = 1) +
+    labs(x = "Date", y = "Mobility index",
+         title = "B) Mobility trend (Driving)") +
+    theme_pubr() +
+    theme(legend.position = "none",
+          axis.text  = element_text(colour = "grey60", size = 6),
+          plot.title = element_text(size = 9, colour = "grey10"),
+          axis.ticks = element_line(colour = "grey60"),
+          axis.line =  element_line(colour = "grey60"),
+          axis.title = element_text(size = 8, colour = "grey40"))
+  
 }
 
 plot_daily_data <- function(irish_data, drv_df) {
@@ -276,26 +303,6 @@ plot_priors <- function(){
   (g1 + g2) / (g3 + g4)
 }
 
-
-plot_wkl_fit <- function(summary_fit, actual_df, y_lab, title_lab) {
-  
-  ggplot(summary_fit, aes(x = week, y = median)) +
-    geom_point(data = actual_df, aes(x = week, y = y), colour = "grey45",
-               size = 1, alpha = 0.75) +
-    geom_line(colour = "steelblue") +
-    scale_y_continuous(labels = comma) +
-    geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim),
-                fill = "steelblue") +
-    scale_x_continuous(breaks = 1:11) +
-    theme_pubr() +
-    labs(y = y_lab, x = "Week", title = title_lab) +
-    theme(axis.title = element_text(size = 8, colour = "grey40"),
-          axis.text  = element_text(colour = "grey60", size = 6),
-          plot.title = element_text(size = 9, colour = "grey25"),
-          axis.ticks = element_line(colour = "grey60"))
-  
-}
-
 plot_lik_surface <- function(tidy_ll_df) {
   ggplot(tidy_ll_df, aes(x = value, y = loglik)) +
     geom_point(colour = "grey50", alpha = 0.75) +
@@ -321,5 +328,20 @@ plot_fit_comparison <- function(sim_data, actual_data, y_label, title_label){
           axis.ticks = element_line(colour = "grey60"))
 }
 
-
+plot_demo <- function(demo_df, title) {
+  
+  non_h   <- demo_df %>% filter(highlight == FALSE)
+  high_df <- demo_df %>% filter(highlight == TRUE)
+  ggplot(non_h, aes(x = week, y = beta)) +
+    geom_line(aes(group = .id), colour = "#C7C2F9", alpha = 0.1) +
+    geom_line(data = high_df, aes(group = .id), colour = "#AAA2F7") +
+    scale_y_continuous(limits = c(0, 10)) +
+    labs(title = title,
+         y     = parse(text = "beta(t)"),
+         x     = "Week") +
+    theme_pubr() +
+    theme(axis.line = element_line(colour = "grey65"),
+          axis.ticks = element_line(colour = "grey65"),
+          axis.text = element_text(colour = "grey65"))
+}
 

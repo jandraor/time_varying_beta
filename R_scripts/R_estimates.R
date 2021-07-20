@@ -13,8 +13,9 @@ estimate_r <- function(beta_t, omega = 0.73, gamma = 1/2.9, eta = 1 / 2.1,
   symp_cont + psymp_cont + asymp_cont
 }
 
-estimate_r_via_matrix <- function(sigma = 1 /3,omega = 0.73, gamma = 1/2.9, 
-                                  eta = 1 / 2.1, mu = 0.5, kappa = 1 / 5) {
+estimate_r_via_matrix <- function(beta_t ,sigma = 1 /3, omega = 0.73, 
+                                  gamma = 1/ 2.9, eta = 1 / 2.1, mu = 0.5, 
+                                  kappa = 1 / 5) {
   
   matrix_F <- matrix(c(0, beta_t, beta_t, mu * beta_t,
                 rep(0, 12)), nrow = 4, byrow = TRUE)
