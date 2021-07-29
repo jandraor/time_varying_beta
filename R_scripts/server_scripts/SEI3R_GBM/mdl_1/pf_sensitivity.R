@@ -7,7 +7,9 @@ library(readr)
 library(stringr)
 library(tictoc)
 
+
 folder <- "./Saved_objects/Irish_data/SEI3R_GBM/mdl_1"
+dir.create(folder, showWarnings = FALSE)
 
 source("./R_scripts/irish_data.R")
 irish_data   <- get_irish_data()
