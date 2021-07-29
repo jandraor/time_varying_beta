@@ -39,7 +39,7 @@ test_pars <- read_csv(path)
 pars_list <- transpose(test_pars)
 
 imap_dfr(pars_list, function(pars_set, i) {
-  n_particles <- c(5e3, 1e4, 2e4)
+  n_particles <- c(5e3, 1e4, 2e4, 5e4, 1e5, 2e5, 5e5, 1e6)
   fn <- file.path(folder, str_glue("pf_sensitivity_{i}.rds"))
   pars <- c(unlist(pars_set), par_obj$fixed)
   
