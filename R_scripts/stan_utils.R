@@ -19,10 +19,22 @@ stock_inits <- function(mdl, manual_values) {
     paste(collapse = "\n")
 }
 
-run_stan_file <- function(fn, fit_options, stan_fn) {
+
+#' Run Stan file
+#'
+#' @param fn A string that indicates the path where file will be saved
+#' @param fit_options A list
+#' @param stan_fn A string that indicates Stan file's path
+run_stan_file <- function(order, fit_options, backup_folder, stan_folder) {
+  
+  fn <- file.path(backup_folder, str_glue("stan_fit_order_{order}.rds"))
   
   if(!file.exists(fn)) {
     
+    stan_fn <- file.path(stan_folder, str_glue("SEI3R_{order}_smth.stan"))
+    
+    tic.clearlog()
+    tic()
   
     mod <- cmdstan_model(stan_fn)
     
@@ -33,18 +45,27 @@ run_stan_file <- function(fn, fit_options, stan_fn) {
                       iter_warmup     = fit_options$warmup,
                       iter_sampling   = fit_options$sampling,
                       refresh         = 5,
-                      save_warmup     = TRUE,
+                      save_warmup     = FALSE,
                       step_size       = fit_options$step_size,
                       adapt_delta     = fit_options$adapt_delta)  
-      
-  sf  <- rstan::read_stan_csv(fit$output_files())
+    
+    toc(quiet = FALSE, log = TRUE)
+    log.lst <- tic.log(format = FALSE)
+    
+    diag_path <- file.path(backup_folder, str_glue("diag_{order}.txt"))
+    diagnosis <- fit$cmdstan_diagnose()
+    writeLines(diagnosis$stdout, diag_path)
+    
+    sf  <- rstan::read_stan_csv(fit$output_files())
+    
+    results <- list(sf = sf, time = log.lst) 
   
-  saveRDS(sf, fn)
+    saveRDS(results, fn)
     
   } else {
-    sf <- readRDS(fn)
+    results <- readRDS(fn)
   }
-  sf
+  results
 }
 
 construct_incidence_df <- function(posterior_df) {

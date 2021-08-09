@@ -7,6 +7,10 @@ header-includes:
   - \usepackage{booktabs}
 ---
 
+This appendix aims to ...
+
+\tableofcontents 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE,
                       message = FALSE)
@@ -92,16 +96,16 @@ imputed_driving_data(drv_data_obj$raw_data,
 g4 <- plot_daily_mobility(daily_mob_df)
 g2 + g4 + g3 + plot_layout(design = layout)
 
-fig_path <- str_glue("./paper_plots/Fig_01_Data.pdf")
+fig_path <- str_glue("./paper_plots/Fig_02_Data.pdf")
 
 ggsave(fig_path, plot = g2 + g4 + g3 + plot_layout(design = layout),
-       height = 6, width = 5)
+       height = 5, width = 5)
 ```
 
 
 \newpage
 
-# Geometric Brownian Motion (GBM) 
+# DPG1 - Geometric Brownian Motion (GBM) 
 
 ## Process model
 
@@ -183,6 +187,7 @@ knitr::kable(um, "latex", booktabs = TRUE, escape = FALSE)
 ```
 
 ```{r}
+time_record_df <- data.frame()
 folder <- "./Saved_objects/Irish_data/SEI3R_GBM/weekly/mdl_2"
 ```
 
@@ -201,7 +206,6 @@ pomp_mdl <- pomp_SEI3R_GBM2(wkl_df, params, 1 / 128)
 ## Likelihood variance test
 
 ```{r, test_lik_var_mdl_2}
-# dt 0.01, takes 91 mins
 source("./R_scripts/likelihood_funs.R")
 source("./R_scripts/helpers.R")
 
@@ -218,14 +222,20 @@ source("./R_scripts/plots.R")
 loglik_se_sens(sens_results2)
 ```
 
-## Inference
+## Parameter inference
 
-### Local search (Single guess)
+### Local search
+
+We initially conduct a preliminary inference test. Specifically, we evaluate
+whether the iterated filtering algorithm, applied to this DGP (DGP1) and data,
+converges to regions of high likelihood.
+
+#### Likelihood maximisation
 
 \hfill
 
-By applying iterated filtering, we search for maximum likelihood estimates from
-a single guess for each unknown parameter. We repeat this process
+Accordingly, from a single point in the parameter space, we search for Maximum
+Likelihood Estimate (MLE) using iterated filtering. We repeat this process
 **twenty** times.
 
 ```{r}
@@ -233,6 +243,14 @@ source("./R_scripts/local_search.R")
 ptb    <- rw.sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, alpha = 0.02)
 fn     <- file.path(folder, "local_search_mdl2.rds")
 ls_obj <- local_search(pomp_mdl, params, ptb, fn, 126842004, 7)
+```
+
+```{r}
+time_row <- data.frame(par = "all", 
+                       step = "LS_ml",
+                       time = calculate_time(ls_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row) 
 ```
 
 ```{r}
@@ -249,7 +267,7 @@ mif_traces(traces_df, names(par_obj$unknown))
 loglik_traces(traces_df, c(-200, 0))
 ```
 
-#### Likelihood
+#### Likelihood estimates
 
 \hfill
 
@@ -261,6 +279,14 @@ fn <- file.path(folder, "local_search_mdl2_ll.rds")
 
 ll_local_search_obj <- mif_ll(mifs_local, seed = 359084918, n_cores = 7,
                               filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par = "all", 
+                       step = "LS_ll",
+                       time = calculate_time(ll_local_search_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row) 
 ```
 
 ```{r, message = TRUE}
@@ -275,7 +301,7 @@ pairs(~loglik+zeta + P_0 + alpha + tau,
       data = ls_loglik_df, pch = 16)
 ```
 
-### Global search by iterated filtering
+### Global search
 
 \hfill
 
@@ -295,6 +321,14 @@ fn     <- file.path(folder, "Global_search_mdl2.rds")
 seed   <- 971112215
 source("./R_scripts/global_search.R")
 gs_obj <- global_search(guesses, fixed_params, mf1, fn, seed, 7)
+```
+
+```{r}
+time_row <- data.frame(par = "all", 
+                       step = "GS_ml",
+                       time = calculate_time(gs_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r, message = FALSE}
@@ -328,6 +362,14 @@ ll_obj      <- mif_ll(mifs_global, Np = 100000, 983707478,
                       n_cores = 7, fn)
 ```
 
+```{r}
+time_row <- data.frame(par  = "all", 
+                       step = "GS_ll",
+                       time = calculate_time(ll_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
 
 ```{r, message = FALSE, fig.height = 4.5, fig.width = 6, fig.align = 'center'}
 source("./R_scripts/helpers.R")
@@ -347,9 +389,11 @@ pairs(~loglik + zeta + P_0 + tau + alpha, data = guess_result_df,
                 expression(alpha)))
 ```
 
-### Profiles
+### Parameter inference
 
-To estimate confidence intervals, we employ the profile likelihood method.
+To perform parameter inference on DGP1's fixed parameters, we employ the profile likelihood method. To illustrate the mechanics of this method, we describe each
+step followed to infer the initial effective contact rate's ($\zeta$) plausible
+region. We repeat this process to infer the remaining three parameters.
 
 ```{r}
 profile_list_GBM        <- vector(mode = "list", 
@@ -376,7 +420,6 @@ var_name <- "zeta"
 ```{r}
 raw_likelihood(guess_result_df, var_name)
 ```
-
 
 
 ##### Starting points
@@ -422,6 +465,14 @@ ifp_obj <- iter_filt_profile(mf1 = mf1,
                              seed = 762115017)
 ```
 
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
 ```{r, message = FALSE, fig.height = 3.5}
 profile_mif_results <- extract_mif_results(ifp_obj)
 
@@ -441,6 +492,14 @@ source("./R_scripts/likelihood_funs.R")
 fn              <- file.path(folder, "ifp_zeta_ll_mdl2.rds")
 profile_results <- mif_ll(zeta_profile_mif_results, seed = 744170621,
                           n_cores = 7, filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r message = FALSE}
@@ -555,6 +614,14 @@ ifp_obj <- iter_filt_profile(mf1 = mf1,
 ```
 
 ```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r}
 source("./R_scripts/helpers.R")
 P_0_profile_mif_results <- extract_mif_results(ifp_obj)
 
@@ -562,6 +629,14 @@ source("./R_scripts/likelihood_funs.R")
 fn              <- file.path(folder, "ifp_P_0_ll_mdl2.rds")
 profile_results <- mif_ll(P_0_profile_mif_results, seed = 990258595, 
                           n_cores = 7, filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r message=FALSE}
@@ -673,6 +748,14 @@ ifp_obj <- iter_filt_profile(mf1 = mf1,
                              seed = 784920424)
 ```
 
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
 ```{r, message = FALSE, fig.height = 3.5}
 alpha_profile_mif_results <- extract_mif_results(ifp_obj)
 
@@ -691,6 +774,14 @@ source("./R_scripts/likelihood_funs.R")
 fn              <- file.path(folder, "ifp_alpha_ll_mdl2.rds")
 profile_results <- mif_ll(alpha_profile_mif_results, seed = 872114710, 
                           n_cores = 7, filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r message=FALSE}
@@ -806,6 +897,14 @@ ifp_obj <- iter_filt_profile(mf1 = mf1,
 ```
 
 ```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r}
 source("./R_scripts/helpers.R")
 profile_mif_results <- extract_mif_results(ifp_obj)
 
@@ -813,6 +912,14 @@ source("./R_scripts/likelihood_funs.R")
 fn              <- file.path(folder, str_glue("ifp_{var_name}_ll_mdl2.rds"))
 profile_results <- mif_ll(profile_mif_results, seed = 520044828, 
                           n_cores = 7, filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r message=FALSE}
@@ -869,6 +976,19 @@ plot_MCAP(prof_ll, var_name, span) -> g2
 g1 / g2
 ```
 
+
+```{r}
+dest_file <- file.path(folder, "elapsed_time.csv")
+write_csv(time_record_df, dest_file)
+
+total_time <- sum(time_record_df$time)
+```
+
+
+It took approximately `r round(total_time / 60, 0)` hours to carry out the
+inference process (iterated filtering + particle filter) on DGP1's fixed
+parameters.
+
 ### Estimates
 
 #### From the likelihood surface
@@ -880,7 +1000,7 @@ source("./R_scripts/build_likelihood_surface.R")
 
 ll_surface <- build_likelihood_surface("GBM", names(par_obj$unknown))
 
-tidy_ll_surface <- ll_surface %>% 
+ll_surface %>% 
   mutate(.id = row_number()) %>% 
   pivot_longer(c(-.id,-loglik)) %>% 
   filter(loglik > max(loglik, na.rm = TRUE) - 10) -> tidy_prof
@@ -888,6 +1008,14 @@ tidy_ll_surface <- ll_surface %>%
 cutoff <- max(tidy_prof$loglik) - 0.5 * qchisq(df = 1,p = 0.95)
  
 plot_lik_surface(tidy_prof)
+```
+
+```{r}
+tidy_prof %>% 
+  pivot_wider(names_from = name, values_from = value) %>% 
+  arrange(desc(loglik)) %>% slice(1:10) %>% 
+  select(-loglik, -`.id`) %>% 
+  write_csv("./Saved_objects/Irish_data/SEI3R_GBM/weekly/mdl_2/top_10.csv")
 ```
 
 ```{r GBM_surf_est}
@@ -942,7 +1070,8 @@ pomp::simulate(pomp_mdl, params = c(par_obj$fixed, mle_vector),
   mutate(highlight = ifelse(.id == 100, TRUE, FALSE)) %>% 
   arrange(.id, week) -> demo_GBM
 
-g_demo_GBM <- plot_demo(demo_GBM, "A) Geometric Brownian Motion (GBM)")
+g_demo_GBM <- plot_demo(demo_GBM, "A) Geometric Brownian Motion (GBM)", 
+                        GBM_colour)
 ```
 
 
@@ -998,7 +1127,7 @@ par_comparison_stochastic(all_est)
 \hfill
 
 ```{r GBM_sampling_space}
-unk_par_MLE <- tidy_ll_surface %>% 
+unk_par_MLE <- tidy_prof %>% 
   filter(loglik > max(loglik, na.rm = T)- 6) %>% 
   pivot_wider(names_from = name, values_from = value) %>% 
   select(-loglik, -`.id`)
@@ -1057,9 +1186,9 @@ summary_hindcast %>% filter(var == "C") %>%
   pivot_wider(names_from = type, values_from = value) %>%
   ungroup() %>% mutate(week = 1:11)-> pred_inc
 
-g1 <- plot_wkl_fit(pred_inc, wkl_inc, y_lab = "Weekly incidence",
-                   "A) Predicted incidence compared to incidence data",
-                   shape = 18)
+g1 <- plot_wkl_fit(pred_inc, wkl_inc, y_lab = "C[t]^w",
+                   "A) Incidence",
+                   shape = 18, GBM_colour)
 ```
 
 ```{r GBM_C_filt_dist}
@@ -1067,7 +1196,7 @@ source("./R_scripts/filt_dist_utils.R")
 
 samples_C_df <- sample_filt_dist("C", hindcast_df, 383130843)
 g1b          <- plot_filt_dist(samples_C_df, wkl_inc, 
-                               y_label = "Weekly incidence")
+                               y_label = "C[t]^w", GBM_colour)
 ```
 
 ```{r GBM_mob_fit_g}
@@ -1077,9 +1206,9 @@ summary_hindcast %>% filter(var == "Z") %>%
 
 actual_mob <- wkl_df %>% rename(y = y2)
 
-g2 <- plot_wkl_fit(pred_mob_effect, actual_mob, "Relative contact rate", 
-                   "B) Relative contact rate compared to Apple's mobility index",
-                   shape = 16)
+g2 <- plot_wkl_fit(pred_mob_effect, actual_mob, "Z[t]", 
+                   "B) Relative transmission rate",
+                   shape = 16, GBM_colour)
 ```
 
 ```{r}
@@ -1089,7 +1218,8 @@ samples_Z_df <- sample_filt_dist("Z", hindcast_df, 582449113)
 ```
 
 ```{r}
-plot_filt_dist(samples_Z_df, actual_mob, "Relative contact rate") -> g2b
+g2b <- plot_filt_dist(samples_Z_df, actual_mob, "Z[t]", 
+                      GBM_colour)
 ```
 
 ```{r}
@@ -1097,7 +1227,7 @@ summary_hindcast %>% filter(var == "Re") %>%
   pivot_wider(names_from = type, values_from = value) %>%
   ungroup() %>% mutate(week = 1:11)-> re_df
 
-g3 <- plot_hidden_re(re_df)
+g3 <- plot_hidden_re(re_df, GBM_colour)
 ```
 
 ```{r GBM_re_samples}
@@ -1107,11 +1237,11 @@ samples_Re_df <- sample_filt_dist("Re", hindcast_df, 279575935)
 ```
 
 ```{r}
-plot_filt_dist_re(samples_Re_df, wkl_inc) -> g3b
+plot_filt_dist_re(samples_Re_df, wkl_inc, GBM_colour) -> g3b
 ```
 
 ```{r}
-fig_path <- "./paper_plots/Fig_03_GBM.pdf"
+fig_path <- "./paper_plots/Fig_04_GBM.pdf"
 
 ggsave(fig_path, 
        plot = (g1 | g1b) / (g2 | g2b) / (g3 | g3b), dpi = "print",
@@ -1125,7 +1255,7 @@ est_df <- surf_est %>% filter(name != "alpha" & name!= "tau") %>%
          lower_limit = ll,
          upper_limit = ul)
 
-results_list <- list(label        = "GBM",
+results_list <- list(label        = "M1 (GBM)",
                      sim_inc      = pred_inc,
                      sim_mob      = pred_mob_effect,
                      Re_t         = re_df,
@@ -1139,11 +1269,12 @@ if(!file.exists(fn)) saveRDS(results_list, fn)
 
 \newpage
 
-# Cox–Ingersoll–Ross
+# DGP2 - Cox–Ingersoll–Ross (CIR)
 
 ```{r CIR}
-pomp_mdl <- NULL
-folder   <- "./Saved_objects/Irish_data/SEI3R_CIR/weekly/mdl_2"
+pomp_mdl       <- NULL
+time_record_df <- data.frame()
+folder         <- "./Saved_objects/Irish_data/SEI3R_CIR/weekly/mdl_2"
 ```
 
 
@@ -1245,6 +1376,14 @@ ls_obj <- local_search(pomp_mdl, params, ptb, fn, 292718669, 7)
 ```
 
 ```{r}
+time_row <- data.frame(par = "all", 
+                       step = "LS_ml",
+                       time = calculate_time(ls_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row) 
+```
+
+```{r}
 mifs_local <- ls_obj$result
 
 mifs_local %>%
@@ -1268,6 +1407,14 @@ ll_local_search_obj <- mif_ll(mifs_local, seed = 359084918, n_cores = 7,
                               filename = fn)
 ```
 
+```{r}
+time_row <- data.frame(par = "all", 
+                       step = "LS_ll",
+                       time = calculate_time(ll_local_search_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row) 
+```
+
 ```{r, message = TRUE}
 source("./R_scripts/helpers.R")
 
@@ -1277,7 +1424,7 @@ pairs(~loglik+zeta + P_0 + alpha + tau + nu + upsilon,
       data = ls_loglik_df, pch=16)
 ```
 
-#### Global search by iterated filtering
+#### Global search
 
 \hfill
 
@@ -1299,6 +1446,14 @@ fn     <- file.path(folder, "Global_search_mdl2.rds")
 seed   <- 435367905
 source("./R_scripts/global_search.R")
 gs_obj <- global_search(guesses, fixed_params, mf1, fn, seed, 7)
+```
+
+```{r}
+time_row <- data.frame(par = "all", 
+                       step = "GS_ml",
+                       time = calculate_time(gs_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r, message = FALSE}
@@ -1326,6 +1481,14 @@ source("./R_scripts/likelihood_funs.R")
 fn          <- file.path(folder, "Global_search_mdl2_ll.rds" )
 ll_obj      <- mif_ll(mifs_global, Np = 100000, 1270401374, 
                       n_cores = 7, fn)
+```
+
+```{r}
+time_row <- data.frame(par  = "all", 
+                       step = "GS_ll",
+                       time = calculate_time(ll_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r}
@@ -1410,6 +1573,14 @@ ifp_obj <- iter_filt_profile(mf1 = mifs_local[[1]],
                          seed = 553239040)
 ```
 
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
 ```{r, message = FALSE, fig.height = 3.5}
 profile_mif_results <- extract_mif_results(ifp_obj)
 
@@ -1428,6 +1599,14 @@ source("./R_scripts/likelihood_funs.R")
 fn              <- file.path(folder, "ifp_zeta_ll_mdl2.rds")
 profile_results <- mif_ll(profile_mif_results, seed = 426820244,
                           n_cores = 7, filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r CIR_zeta_ll_g, message=FALSE}
@@ -1545,6 +1724,14 @@ ifp_obj <- iter_filt_profile(mf1 = mf1,
                              seed = 787856777)
 ```
 
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
 ```{r, message = FALSE, fig.height = 3.5}
 profile_mif_results <- extract_mif_results(ifp_obj)
 
@@ -1560,6 +1747,14 @@ source("./R_scripts/likelihood_funs.R")
 fn              <- file.path(folder, str_glue("ifp_{var_name}_ll_mdl2.rds"))
 profile_results <- mif_ll(profile_mif_results, seed = 879588259, 
                           n_cores = 7, filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r CIR_P_0_ll_g, message=FALSE}
@@ -1673,6 +1868,14 @@ ifp_obj <- iter_filt_profile(mf1 = mifs_local[[1]],
                          seed = 759912441)
 ```
 
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
 ```{r, message = FALSE, fig.height = 3.5}
 profile_mif_results <- extract_mif_results(ifp_obj)
 
@@ -1688,6 +1891,14 @@ source("./R_scripts/likelihood_funs.R")
 fn              <- file.path(folder, "ifp_alpha_ll_mdl2.rds")
 profile_results <- mif_ll(profile_mif_results, seed = 923398287,
                           n_cores = 7, filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r CIR_alpha_ll_g, message=FALSE}
@@ -1802,6 +2013,14 @@ ifp_obj <- iter_filt_profile(mf1 = mifs_local[[1]],
                          seed = 139567891)
 ```
 
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
 ```{r, message = FALSE, fig.height = 3.5}
 profile_mif_results <- extract_mif_results(ifp_obj)
 
@@ -1817,6 +2036,14 @@ source("./R_scripts/likelihood_funs.R")
 fn              <- file.path(folder, str_glue("ifp_{var_name}_ll_mdl2.rds"))
 profile_results <- mif_ll(profile_mif_results, seed = 124029086, 
                           n_cores = 7, filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r CIR_tau_ll_g, message=FALSE}
@@ -1923,6 +2150,14 @@ ifp_obj <- iter_filt_profile(mf1 = mifs_local[[1]],
                          seed = 972740300)
 ```
 
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
 ##### Profile traces
 
 \hfill
@@ -1944,6 +2179,14 @@ source("./R_scripts/likelihood_funs.R")
 fn              <- file.path(folder, str_glue("ifp_{var_name}_ll_mdl2.rds"))
 profile_results <- mif_ll(profile_mif_results, seed = 256315391, 
                           n_cores = 7, filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r CIR_nu_ll_g, message=FALSE}
@@ -2050,6 +2293,14 @@ ifp_obj <- iter_filt_profile(mf1 = mifs_local[[1]],
                          seed = 236721874)
 ```
 
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
 ##### Profile traces
 
 \hfill
@@ -2072,6 +2323,14 @@ source("./R_scripts/likelihood_funs.R")
 fn              <- file.path(folder, str_glue("ifp_{var_name}_ll_mdl2.rds"))
 profile_results <- mif_ll(profile_mif_results, seed = 203319210, 
                           n_cores = 7, filename = fn)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
 ```{r CIR_upsilon_ll_g, message=FALSE}
@@ -2126,6 +2385,17 @@ plot_MCAP(prof_ll, var_name, span) -> g2
 g1 / g2
 ```
 
+```{r}
+dest_file <- file.path(folder, "elapsed_time.csv")
+write_csv(time_record_df, dest_file)
+
+total_time <- sum(time_record_df$time)
+```
+
+It took approximately `r round(total_time / 60, 0)` hours to carry out the
+inference process (iterated filtering + particle filter) on DGP2's fixed
+parameters.
+
 ### Estimates
 
 #### From the likelihood surface
@@ -2137,7 +2407,7 @@ source("./R_scripts/build_likelihood_surface.R")
 
 ll_surface <- build_likelihood_surface("CIR", names(par_obj$unknown))
 
-tidy_ll_surface <- ll_surface %>% 
+ll_surface %>% 
   mutate(.id = row_number()) %>% 
   pivot_longer(c(-.id,-loglik)) %>% 
   filter(loglik > max(loglik, na.rm = TRUE) - 6) -> tidy_prof
@@ -2198,9 +2468,9 @@ pomp::simulate(pomp_mdl, params = c(par_obj$fixed, mle_vector),
   mutate(highlight = ifelse(.id == 100, TRUE, FALSE)) %>% 
   arrange(.id, week) -> demo_CIR
 
-g_demo_CIR <- plot_demo(demo_CIR, "B) Cox-Ingersoll-Ross (CIR)")
+g_demo_CIR <- plot_demo(demo_CIR, "B) Cox-Ingersoll-Ross (CIR)", CIR_colour)
 
-ggsave("./paper_plots/Fig_02_Simulations.pdf", 
+ggsave("./paper_plots/Fig_03_Simulations.pdf", 
        plot = g_demo_GBM / g_demo_CIR, height = 7, width = 5)
 ```
 
@@ -2254,7 +2524,7 @@ par_comparison_stochastic(all_est)
 \hfill
 
 ```{r}
-unk_par_MLE <- tidy_ll_surface %>% 
+unk_par_MLE <- tidy_prof %>% 
   filter(loglik > max(loglik, na.rm = T)- 3.5) %>% 
   pivot_wider(names_from = name, values_from = value) %>% 
   select(-loglik, -`.id`)
@@ -2334,7 +2604,7 @@ cutoff_vector <- c("1e1", "2e1", "5e1", "1e2", "5e2", "1e3")
 
 cutoffs <- factor(cutoff_vector, levels = cutoff_vector)
 
-df_list <- map(cutoffs, function(co) {
+df_list <- purrr::map(cutoffs, function(co) {
   co_val <- as.numeric(as.character(co))
   
   df <- loglik_id %>% filter(loglik > max(loglik) - co_val) %>%
@@ -2434,8 +2704,9 @@ summary_hindcast %>% filter(var == "C") %>%
   pivot_wider(names_from = type, values_from = value) %>%
   ungroup() %>% mutate(week = 1:11)-> pred_inc
 
-g1 <- plot_wkl_fit(pred_inc, wkl_inc, y_lab = "Weekly incidence",
-                   "Incidence fit", shape = 18)
+g1 <- plot_wkl_fit(pred_inc, wkl_inc, y_lab = "C[t]^w",
+                   "A) Incidence", 
+                   shape = 18, CIR_colour)
 ```
 
 ```{r CIR_C_filt_dist}
@@ -2443,7 +2714,7 @@ source("./R_scripts/filt_dist_utils.R")
 
 samples_C_df <- sample_filt_dist("C", hindcast_df, 135117983)
 g1b          <- plot_filt_dist(samples_C_df, wkl_inc, 
-                               y_label = "Weekly incidence")
+                               y_label = "C[t]^w", CIR_colour)
 ```
 
 ```{r}
@@ -2453,8 +2724,10 @@ summary_hindcast %>% filter(var == "Z") %>%
 
 actual_mob <- wkl_df %>% rename(y = y2)
 
-g2 <- plot_wkl_fit(pred_mob_effect, actual_mob, "Mobility index", "Mobility fit",
-                   shape = 16)
+g2 <- plot_wkl_fit(pred_mob_effect, actual_mob, 
+                   "Z[t]",
+                   "B) Relative transmission rate",
+                   shape = 16, CIR_colour)
 ```
 
 ```{r CIR_Z_filt_dist}
@@ -2462,7 +2735,7 @@ source("./R_scripts/filt_dist_utils.R")
 
 samples_Z_df <- sample_filt_dist("Z", hindcast_df, 135117983)
 g2b          <- plot_filt_dist(samples_Z_df, actual_mob, 
-                               y_label = "Z(t)")
+                               y_label = "Z[t]", dist_col = CIR_colour)
 ```
 
 
@@ -2471,7 +2744,7 @@ summary_hindcast %>% filter(var == "Re") %>%
   pivot_wider(names_from = type, values_from = value) %>%
   ungroup() %>% mutate(week = 1:11)-> re_df
 
-g3 <- plot_hidden_re(re_df)
+g3 <- plot_hidden_re(re_df, CIR_colour)
 ```
 
 
@@ -2479,13 +2752,13 @@ g3 <- plot_hidden_re(re_df)
 source("./R_scripts/filt_dist_utils.R")
 
 samples_Re_df <- sample_filt_dist("Re", hindcast_df, 101903287)
-g3b <- plot_filt_dist_re(samples_Re_df, wkl_inc) 
+g3b <- plot_filt_dist_re(samples_Re_df, wkl_inc, CIR_colour) 
 ```
 
 
 
 ```{r}
-ggsave("./paper_plots/Fig_04_CIR.pdf", 
+ggsave("./paper_plots/Fig_05_CIR.pdf", 
        plot = (g1 | g1b) / (g2 | g2b) / (g3 | g3b), 
        height = 7, width = 5)
 ```
@@ -2497,7 +2770,7 @@ est_df <- surf_est %>% filter(name != "alpha" & name!= "tau") %>%
          lower_limit = ll,
          upper_limit = ul)
 
-results_list <- list(label        = "CIR",
+results_list <- list(label        = "M2 (CIR)",
                      sim_inc      = pred_inc,
                      sim_mob      = pred_mob_effect,
                      Re_t         = re_df,

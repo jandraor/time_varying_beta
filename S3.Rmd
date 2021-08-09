@@ -20,7 +20,7 @@ source("./R_scripts/plots.R")
 ```
 
 ```{r}
-mdls <- c("GBM", "SMTH")
+mdls <- c("GBM", "SMTH", "CIR")
 ```
 
 
@@ -44,12 +44,12 @@ map_df(mdls, function(mdl) {
   fn       <- file.path(folder, "predictions.rds") 
   pred_obj <-readRDS(fn)
   
-  pred_obj$sim_inc %>% mutate(mdl = pred_obj$label)
+  pred_obj$sim_inc %>% mutate(DGP = pred_obj$label)
 }) -> sim_inc
 
 
-plot_fit_comparison(sim_inc, wkl_inc, "Incidence [New cases/week]",
-                    "Incidence fit per model") -> g1
+plot_fit_comparison(sim_inc, wkl_inc, "C[t]^w",
+                    "A) Incidence fit per DGP", shape = 18) -> g1
 ```
 
 ```{r}
@@ -70,11 +70,11 @@ map_df(mdls, function(mdl) {
   fn       <- file.path(folder, "predictions.rds") 
   pred_obj <-readRDS(fn)
   
-  pred_obj$sim_mob %>% mutate(mdl = pred_obj$label)
+  pred_obj$sim_mob %>% mutate(DGP = pred_obj$label)
 }) %>% filter(week >=1 & week <= 11) -> sim_mob
 
-plot_fit_comparison(sim_mob, actual_mob, "Mobility index [Unitless]",
-                    "Mobility fit per model") -> g2
+plot_fit_comparison(sim_mob, actual_mob, "Z[t]",
+                    "B) Relative transmission rate fit per DGP", shape = 16) -> g2
 ```
 
 ```{r}
@@ -87,57 +87,44 @@ map_df(mdls, function(mdl) {
   fn       <- file.path(folder, "predictions.rds") 
   pred_obj <-readRDS(fn)
   
-  pred_obj$R_t %>% mutate(mdl = pred_obj$label)
-})%>% filter(week >=1 & week <= 11) -> sim_R
-
-ggplot(sim_R, aes(x = week, y = median)) +
-  geom_line(aes(group = mdl, colour = mdl)) +
-  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim,
-                                fill = mdl)) +
-  labs(y = parse(text = "R[t]"), x = "Week",
-       title = "Basic reproductive number")+
-  scale_x_continuous(breaks = 1:11) +
-  theme_pubr() +
-  theme(axis.title = element_text(size = 8, colour = "grey40"),
-        axis.text  = element_text(colour = "grey60", size = 6),
-        plot.title = element_text(size = 9, colour = "grey25"),
-        axis.ticks = element_line(colour = "grey60")) -> g3
-```
-
-```{r}
-map_df(mdls, function(mdl) {
-  folder   <- str_glue("./Saved_objects/Irish_data/SEI3R_{mdl}")
-  if(mdl != "SMTH") {
-    folder <- paste0(folder, "/weekly/mdl_2")
-  }
-  
-  fn       <- file.path(folder, "predictions.rds") 
-  pred_obj <-readRDS(fn)
-  
-  pred_obj$Re_t %>% mutate(mdl = pred_obj$label)
+  pred_obj$Re_t %>% mutate(DGP = pred_obj$label)
 })%>% filter(week >=1 & week <= 11) -> sim_Re
 
-ggplot(sim_Re, aes(x = week, y = median)) +
-  geom_hline(yintercept = 1, colour = "grey60", linetype = "dashed") +
-  geom_line(aes(group = mdl, colour = mdl)) +
-  geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim,
-                                fill = mdl)) +
+ggplot(sim_Re, aes(x = week, y = q50)) +
+  geom_hline(yintercept = 1, colour = ET_colour, linetype = "dashed") +
+  geom_line(aes(group = DGP, colour = DGP)) +
+  geom_ribbon(alpha = 0.25, aes(ymin = q2.5, ymax = q97.5,
+                                fill = DGP)) +
   geom_vline(xintercept = 1.86, colour = "grey50", linetype = "dotted") +
   annotate("text", x = 1.96, y = 6, size = 1.5,
              label = "Delay phase", hjust = 0, size = 3, colour = "grey50") +
   geom_vline(xintercept = 4, colour = "grey50", linetype = "dotted") +
   annotate("text", x = 4.1, y = 6, size = 1.5,
              label = "Stay at home", hjust = 0, size = 3, colour = "grey50") +
+  scale_colour_manual(values = sim_colours) +
+  scale_fill_manual(values = sim_colours) +
   labs(y = parse(text = "Re[t]"), x = "Week",
-       title = "Effective reproductive number")+
+       title = "C) Effective reproductive number per DGP")+
   scale_x_continuous(breaks = 1:11) +
   theme_pubr()  +
   theme(axis.title = element_text(size = 8, colour = "grey40"),
         axis.text  = element_text(colour = "grey60", size = 6),
         plot.title = element_text(size = 9, colour = "grey25"),
-        axis.ticks = element_line(colour = "grey60")) -> g4
+        axis.ticks = element_line(colour = "grey60"),
+        axis.line  = element_line(colour = "grey60")) -> g3
 ```
 
 ```{r, fig.height = 6}
-(g1 / g2) | (g3 / g4)
+g1 / g2 / g3 / guide_area() + 
+  plot_layout(guides = 'collect') -> g
+print(g)
 ```
+
+
+```{r}
+fig_path <- "./paper_plots/Fig_07_Comparison.pdf"
+ggsave(fig_path, 
+       g, dpi = "print",
+       height = 7, width = 5)
+```
+       

@@ -7,6 +7,14 @@ library(scales)
 
 source("./R_scripts/plots_inference.R")
 
+data_colour <- "#FF7241"
+GBM_colour  <- "#344D77"
+CIR_colour  <- "#C55A82"
+STH_colour  <- "#62DCDA"
+ET_colour   <- "#FFD34B"
+
+sim_colours <- c(GBM_colour, CIR_colour, STH_colour)
+
 pm_likelihood <- function(df) {
   tidy_loglik_df <- df %>% filter(type != "guess") %>%
     mutate(row_number = row_number()) %>% 
@@ -35,7 +43,7 @@ hist_final_epi_size <- function(sim_tc_df) {
 
 daily_epicurve <- function(irish_data, formatted_tc) {
   ggplot(irish_data, aes(x = date, y = y)) +
-    geom_col(colour = "white", fill = "steelblue", alpha = 0.95) +
+    geom_col(colour = "white", fill = data_colour, alpha = 0.95) +
     theme_pubr() +
     geom_vline(xintercept = as_date("2020-02-29") + 13, colour = "grey50",
                linetype = "dotted") +
@@ -71,9 +79,9 @@ daily_epi_trend <- function(irish_data) {
     labs(x = "Date of Lab specimen collection",
          y = "Incidence [new cases per day]",
          title = "A) Daily detected cases") +
-    geom_point(colour = "#194973", size = 0.75, shape = 18, alpha = 0.95) +
+    geom_point(colour = data_colour, size = 0.75, shape = 18, alpha = 0.95) +
     geom_line(stat="smooth", method = "loess", formula = y ~ x, alpha = 0.25,
-              colour = "#194973", span = 0.25, size = 1) +
+              colour = data_colour, span = 0.25, size = 1) +
     theme_pubr() +
     theme(axis.title = element_text(size = 8, colour = "grey40"),
           axis.text  = element_text(colour = "grey60", size = 6),
@@ -84,7 +92,7 @@ daily_epi_trend <- function(irish_data) {
 
 weekly_epicurve <- function(wkl_data) {
   ggplot(wkl_data, aes(x = week, y = y)) +
-    geom_col(fill = "#194973") +
+    geom_col(fill = data_colour) +
     scale_x_continuous(breaks = 0:12) +
     theme_pubclean() +
     labs(y = "Incidence [new cases per week]",
@@ -132,10 +140,10 @@ plot_daily_mobility <- function(daily_mob_df) {
     filter(time <= 77)
   
   ggplot(daily_mob_df, aes(x = date, y = y)) +
-    geom_point(colour = "#194973", aes(alpha = end_of_week), size = 0.5)   +
+    geom_point(colour = data_colour, aes(alpha = end_of_week), size = 0.5)   +
     scale_alpha_manual(values = c(0.25, 1)) +
     geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.1,
-              colour = "#194973", span = 0.25, size = 1) +
+              colour = data_colour, span = 0.25, size = 1) +
     labs(x = "Date", y = "Mobility index",
          title = "B) Mobility trend (Driving)") +
     theme_pubr() +
@@ -311,33 +319,16 @@ plot_lik_surface <- function(tidy_ll_df) {
     theme_pubr() 
 }
 
-plot_fit_comparison <- function(sim_data, actual_data, y_label, title_label){
-  ggplot(sim_data, aes(x = week, y = median)) +
-    geom_line(aes(colour = mdl, group = mdl)) +
-    scale_y_continuous(labels = comma) +
-    geom_ribbon(alpha = 0.25, aes(ymin = lower_lim, ymax = upper_lim,
-                                  fill = mdl)) +
-    geom_point(data = actual_data, aes(x = week, y = y), colour = "grey45",
-               size = 1) +
-    theme_pubr() +
-    labs(y = y_label, x = "Week", 
-         title = title_label) +
-    theme(axis.title = element_text(size = 8, colour = "grey40"),
-          axis.text  = element_text(colour = "grey60", size = 6),
-          plot.title = element_text(size = 9, colour = "grey25"),
-          axis.ticks = element_line(colour = "grey60"))
-}
-
-plot_demo <- function(demo_df, title) {
+plot_demo <- function(demo_df, title, colour) {
   
   non_h   <- demo_df %>% filter(highlight == FALSE)
   high_df <- demo_df %>% filter(highlight == TRUE)
   ggplot(non_h, aes(x = week, y = beta)) +
-    geom_line(aes(group = .id), colour = "#C7C2F9", alpha = 0.1) +
-    geom_line(data = high_df, aes(group = .id), colour = "#AAA2F7") +
+    geom_line(aes(group = .id), colour = colour, alpha = 0.1) +
+    geom_line(data = high_df, aes(group = .id), colour = colour) +
     scale_y_continuous(limits = c(0, 10)) +
     labs(title = title,
-         y     = parse(text = "beta(t)"),
+         y     = parse(text = "beta[t]"),
          x     = "Week") +
     theme_pubr() +
     theme(axis.line = element_line(colour = "grey65"),
