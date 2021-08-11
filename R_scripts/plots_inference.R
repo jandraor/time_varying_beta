@@ -108,7 +108,7 @@ plot_fits_by_order <- function(sim_df, actual_data, df_labels, shape, x_lab,
           axis.line  = element_line(colour = "grey60", size = 0.25),
           axis.ticks = element_line(colour = "grey60", size = 0.25),
           axis.title = element_text(size = 8, colour = "grey40"),
-          panel.border = element_rect(colour = "grey95", fill=NA, size = 0.5))
+          panel.border = element_rect(colour = "grey95", fill = NA, size = 0.5))
 }
 
 plot_fit_comparison <- function(sim_data, actual_data, y_label, title_label, 

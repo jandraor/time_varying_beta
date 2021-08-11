@@ -1,5 +1,6 @@
 library(extraDistr)
 library(GGally)
+library(ggalt)
 library(ggplot2)
 library(ggpubr)
 library(patchwork)
@@ -158,24 +159,10 @@ plot_daily_mobility <- function(daily_mob_df) {
 
 plot_daily_data <- function(irish_data, drv_df) {
   
-  g1 <- ggplot(irish_data, aes(x = date, y = y)) +
-    geom_point(colour = "steelblue", alpha = 0.8) +
-    stat_smooth(geom = 'line', alpha = 0.5, se = FALSE, span = 0.25,
-                colour = "grey50", size = 1) +
-    labs(y = "Incidence\n[new cases per week]",
-         x = "Week of Lab specimen collection") +
-    theme_pubr() +
-    theme(axis.text.y = element_text(size = 7),
-          axis.title.y = element_text(size = 8))
+  g1 <- daily_epi_trend(irish_data)
   
-  g2 <- ggplot(drv_df, aes(x = date, y = y2)) +
-    geom_point(colour = "steelblue", alpha = 0.8) +
-    stat_smooth(geom = 'line', alpha = 0.5, se = FALSE, 
-                colour = "grey50", size = 1) +
-    labs(y = "Mobility index\n[Unitless]", x = "Date") +
-    theme_pubr() +
-    theme(axis.text.y = element_text(size = 7),
-          axis.title.y = element_text(size = 8))
+  g2 <- plot_daily_mobility(daily_mob_df) +
+    geom_point(colour = data_colour, size = 0.5)
   
   g1 / g2
 }
@@ -334,5 +321,27 @@ plot_demo <- function(demo_df, title, colour) {
     theme(axis.line = element_line(colour = "grey65"),
           axis.ticks = element_line(colour = "grey65"),
           axis.text = element_text(colour = "grey65"))
+}
+
+plot_time_comparison <- function(time_df, tt){
+  ggplot(time_df, aes(x = as.factor(order), y = time)) +
+    geom_lollipop(point.colour = STH_colour, colour = "grey70") +
+    coord_flip() +
+    theme_pubr() +
+    labs(y = "Elapsed time [mins]", x = "Delay order",
+         caption = str_glue("Total computational time: {tt} mins")) +
+    theme(axis.line = element_line(colour = "grey75"),
+          axis.ticks = element_line(colour = "grey75"),
+          axis.text = element_text(colour = "grey45"),
+          axis.title = element_text(colour = "grey40"))
+}
+
+
+plot_traces <- function(sf) {
+  traces_cols <- c("#D8DDB7", "#F5F3E7", "#1B4D60", "#578372")
+  
+  traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0")) +
+    scale_colour_manual(values = traces_cols) +
+    facet_wrap(~parameter, labeller = label_parsed, scales = "free")
 }
 

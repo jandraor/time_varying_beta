@@ -7,6 +7,15 @@ header-includes:
   - \usepackage{booktabs}
 ---
 
+This appendix aims to illustrate the inference process applied to DGP3. This
+structure consists of nine candidate deterministic process models (PM3) and an
+observational or measurement model (OM2) that accounts for the daily COVID-19 
+cases detected in Ireland's first wave. We envision this inference process in a
+Bayesian context, where the predicted values stem from DGP3's expected value,
+which is approximated using Hamiltonian Monte Carlo (HMC).
+
+\tableofcontents 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 
@@ -26,11 +35,20 @@ library(stringr)
 library(tictoc)
 library(tidyr)
 
+source("./R_scripts/helpers.R")
 folder      <- "./Saved_objects/Irish_data/SEI3R_SMTH"
 stan_folder <- "./Stan_files"
 ```
 
+\newpage
+
 # Data
+
+For this inference process, we use two datasets. In the first step, we fit via 
+HMC the nine candidate models to the incidence data. Then, we compare the 
+estimated relative contact rates to the normalised driving indexes.
+
+\hfill
 
 ```{r}
 source("./R_scripts/irish_data.R")
@@ -38,23 +56,86 @@ irish_data   <- get_irish_data()
 
 source("./R_scripts/apple.R")
 drv_data_obj <- get_driving_data()
+imp          <- drv_data_obj$imputed_data
+dates        <- seq(ymd('2020-02-29'), ymd("2020-05-17"), by = '1 day')
+daily_mob_df <- data.frame(date = dates, y = imp)
 ```
 
-```{r, fig.height = 3}
+```{r, fig.height = 6}
 source("./R_scripts/plots.R")
 
-plot_daily_data(irish_data, drv_data_obj$df)
+plot_daily_data(irish_data, daily_mob_df)
 ```
 
+\newpage
 
-# Priors
+# DGP3 - Adaptive expectations
 
-```{r, fig.height = 3}
+## Process model (PM3)
+
+\begin{equation}
+    \frac{dS}{dt} = - S_t \lambda_t
+\end{equation}
+
+\begin{equation}
+   \frac{dE}{dt} = S_t \lambda_t - \sigma E_t
+\end{equation}
+
+\begin{equation}
+   \frac{dP}{dt} = \omega \sigma E_t - \eta P_t
+\end{equation}
+
+\begin{equation}
+   \frac{dI}{dt} =  \eta P_t - \gamma I_t
+\end{equation}
+
+\begin{equation}
+   \frac{dA}{dt} =  (1-\omega) \sigma E_t - \kappa A_t
+\end{equation}
+
+\begin{equation}
+   \frac{dR}{dt} =  \kappa A_t - \gamma I_t
+\end{equation}
+
+\begin{equation}
+   \lambda_t =  \frac{ \beta_t(I(_t + P_t + \mu A_t)}{N_t} 
+\end{equation}
+
+\begin{equation}
+   \beta_t = \zeta Z^1_t
+\end{equation}
+
+\begin{equation}
+  \frac{dZ^i}{dt} = \begin{cases}
+    \frac{(\upsilon - Z^i_t)}{(\nu^{-1}/n)} \quad i = 1\\ 
+    \\
+    \frac{(Z^{i-1}_t - Z^i_t)}{(\nu^{-1}/n)} \quad \textrm{for} \quad i \in (2, \dotsc, n)   \end{cases}
+\end{equation}
+
+\begin{equation}
+   \frac{dC^d}{dt} =  \eta P_t - C^d_t\delta(t \, mod \, 1)
+\end{equation}
+
+## Measurement model (OM2)
+
+\begin{equation}
+  y_3\sim Pois(C^d_t) 
+\end{equation}
+
+\newpage
+
+# Inference
+
+## Priors
+
+For all of the nine candidate modes, we adopt the following priors:
+
+\hfill
+
+```{r, fig.height = 5}
 source("./R_scripts/plots.R")
 plot_priors()
 ```
-
-# Inference
 
 ```{r inference_lists}
 source("./R_scripts/stan_utils.R")
@@ -67,8 +148,19 @@ ll_list             <- vector("list", n_orders)
 time_list           <- vector("list", n_orders)
 ```
 
+## Sampling
 
-## 1st order delay
+
+For validation purposes, we show the results from the sampling procedure (HMC)
+by means of trace plots. These visualisation tools are time-series of the draws
+for a particular parameter. Here, _time_ refers to the order in which the draws 
+were sampled. Furthermore, the reader can find the diagnostics for each 
+calibration run in the repository of this work. There, we can notice that no 
+_pathological behaviour_ was observed during the target (posterior) distribution exploration, in addition to adequate Effective Sample Sizes and potential scale
+reduction factors ($\widehat{R} < 1.01$). These outcomes suggest that the Markov
+chains converged to the posterior distribution.
+
+### 1st order delay
 
 ```{r}
 dly_o <- 1 # delay order
@@ -100,10 +192,8 @@ time_list[[dly_o]] <- calculate_time(results$time)
 sf                 <- results$sf
 ```
 
-### Traceplots
-
 ```{r, fig.height = 3.5}
-traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+plot_traces(sf)
 ```
 
 ```{r}
@@ -115,7 +205,7 @@ Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
 ll_list[[dly_o]]             <- posterior_df %>% select(log_lik)
 ```
 
-## 2nd order delay
+### 2nd order delay
 
 ```{r}
 dly_o <- 2 # delay order
@@ -147,10 +237,8 @@ time_list[[dly_o]] <- calculate_time(results$time)
 sf                 <- results$sf
 ```
 
-### Traceplots
-
 ```{r, fig.height = 3.5}
-traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+plot_traces(sf)
 ```
 
 ```{r}
@@ -162,7 +250,7 @@ Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
 ll_list[[dly_o]]             <- posterior_df %>% select(log_lik)
 ```
 
-## 3rd order delay
+### 3rd order delay
 
 ```{r}
 dly_o <- 3 # delay order
@@ -194,10 +282,8 @@ time_list[[dly_o]] <- calculate_time(results$time)
 sf                 <- results$sf
 ```
 
-### Traceplots
-
 ```{r, fig.height = 3.5}
-traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+plot_traces(sf)
 ```
 
 ```{r}
@@ -210,7 +296,7 @@ ll_list[[dly_o]]             <- posterior_df %>% select(log_lik)
 ```
 
 
-## 4th order delay
+### 4th order delay
 
 ```{r}
 dly_o <- 4 # delay order
@@ -242,10 +328,8 @@ time_list[[dly_o]] <- calculate_time(results$time)
 sf                 <- results$sf
 ```
 
-### Traceplots
-
 ```{r, fig.height = 3.5}
-traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+plot_traces(sf)
 ```
 
 ```{r}
@@ -258,7 +342,7 @@ ll_list[[dly_o]]             <- posterior_df %>% select(log_lik)
 ```
 
 
-## 5th order delay
+### 5th order delay
 
 ```{r}
 dly_o <- 5 # delay order
@@ -290,10 +374,8 @@ time_list[[dly_o]] <- calculate_time(results$time)
 sf                 <- results$sf
 ```
 
-### Traceplots
-
 ```{r, fig.height = 3.5}
-traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+plot_traces(sf)
 ```
 
 ```{r}
@@ -308,7 +390,7 @@ ll_list[[dly_o]]             <- posterior_df %>% select(log_lik)
 ```
 
 
-## 6th order delay
+### 6th order delay
 
 ```{r}
 dly_o <- 6 # delay order
@@ -340,10 +422,8 @@ time_list[[dly_o]] <- calculate_time(results$time)
 sf                 <- results$sf
 ```
 
-### Traceplots
-
 ```{r, fig.height = 3.5}
-traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+plot_traces(sf)
 ```
 
 ```{r}
@@ -355,7 +435,7 @@ Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
 ll_list[[dly_o]]             <- posterior_df %>% select(log_lik)
 ```
 
-## 7th order delay
+### 7th order delay
 
 ```{r}
 dly_o <- 7 # delay order
@@ -387,10 +467,8 @@ time_list[[dly_o]] <- calculate_time(results$time)
 sf                 <- results$sf
 ```
 
-### Traceplots
-
 ```{r, fig.height = 3.5}
-traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+plot_traces(sf)
 ```
 
 ```{r}
@@ -402,7 +480,7 @@ Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
 ll_list[[dly_o]]             <- posterior_df %>% select(log_lik)
 ```
 
-## 8th order delay
+### 8th order delay
 
 ```{r}
 dly_o <- 8 # delay order
@@ -435,7 +513,7 @@ sf                 <- results$sf
 ```
 
 ```{r, fig.height = 3.5}
-traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+plot_traces(sf)
 ```
 
 ```{r}
@@ -447,7 +525,7 @@ Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
 ll_list[[dly_o]]             <- posterior_df %>% select(log_lik)
 ```
 
-## 9th order delay
+### 9th order delay
 
 ```{r}
 dly_o <- 9 # delay order
@@ -480,7 +558,7 @@ sf                 <- results$sf
 ```
 
 ```{r, fig.height = 3.5}
-traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0"))
+plot_traces(sf)
 ```
 
 ```{r}
@@ -495,11 +573,9 @@ ll_list[[dly_o]]             <- posterior_df %>% select(log_lik)
 
 \newpage
 
-# Summary
+## Expected values
 
-## Fits
-
-### Incidence
+###  Predicted incidence compared to daily case counts
 
 \hfill
 
@@ -508,22 +584,31 @@ ll_list[[dly_o]]             <- posterior_df %>% select(log_lik)
 set.seed(19860618)
 incidence_g <- purrr::map(sim_incidences_list, function(df) {
   
+  order <- unique(df$order)
+  
   sample_iters <- sample.int(8000, 100)
   
   df <- df %>% filter(iter %in% sample_iters)
   
   ggplot(df, aes(x = time, y = value)) +
-  geom_line(aes(group = iter), colour = "grey50", alpha = 0.1) +
-  geom_point(data = irish_data, aes(y = y), colour = "steelblue",
-             alpha = 0.8, size = 0.5) +
+  geom_line(aes(group = iter), colour = STH_colour, alpha = 0.1) +
+  geom_point(data = irish_data, aes(y = y), colour = data_colour,
+             alpha = 0.8, size = 0.5, shape = 16) +
   theme_pubr() +
-  labs(subtitle = str_glue("Order: {unique(df$order)}"),
-       x = "")
+  labs(subtitle = str_glue("Order: {order}"),
+       x = "", 
+       y = parse(text = "C[t]^d")) +
+  theme(axis.text = element_text(colour = "grey60", size = 8),
+        axis.line  = element_line(colour = "grey60"),
+        axis.ticks = element_line(colour = "grey60"),
+        axis.title = element_text(colour = "grey40"))
 }) %>% compact()
 
 (incidence_g[[1]] + incidence_g[[2]] + incidence_g[[3]]) / 
   ( incidence_g[[4]] + incidence_g[[5]] + incidence_g[[6]]) /
-  (incidence_g[[7]] + incidence_g[[8]] + incidence_g[[9]])
+  (incidence_g[[7]] + incidence_g[[8]] + incidence_g[[9]]) +
+  plot_annotation(caption = "Time since the first reported case [Days]",
+                  theme = theme(plot.caption = element_text(hjust = 0.5)))
 
 ```
 
@@ -565,7 +650,7 @@ ggsave("./paper_plots/Fig_06_GSB.pdf",
 
 \newpage
 
-### Mobility fits
+### Predicted relative contact rate compared to mobility indexes
 
 \hfill
 
@@ -581,31 +666,31 @@ mobility_g <- imap(Z_list, function(df, i) {
   geom_point(data = drv_data_obj$df, aes(y = y2), colour = data_colour, 
              alpha = 0.8, size = 0.5) +
   labs(subtitle = str_glue("Order: {i}"),
-       x = "") +
-  theme(axis.text = element_text(size = 1),
-        plot.subtitle = element_text(size = 1)) 
+       x = "", y = parse(text = "Z[t]")) +
+  theme(axis.text = element_text(colour = "grey60", size = 8),
+        axis.line  = element_line(colour = "grey60"),
+        axis.ticks = element_line(colour = "grey60"),
+        axis.title = element_text(colour = "grey40")) 
 }) %>% compact()
 
 (mobility_g[[1]] + mobility_g[[2]] + mobility_g[[3]]) / (mobility_g[[4]] + mobility_g[[5]] + mobility_g[[6]]) /
-  (mobility_g[[7]] + mobility_g[[8]] + mobility_g[[9]])
+  (mobility_g[[7]] + mobility_g[[8]] + mobility_g[[9]]) +
+  plot_annotation(caption = "Time since the first reported case [Days]",
+                  theme = theme(plot.caption = element_text(hjust = 0.5)))
 ```
 
 
-## Likelihood
+\newpage
 
-```{r}
-ll_df <- imap_dfr(ll_list, function(df, i) {
-  df %>% mutate(order = i)
-})
+### Accuracy
 
-ggplot(ll_df, aes(x = as.factor(order), y = log_lik)) +
-  geom_boxplot() +
-  theme_pubr()
-```
-
-
-
-## Mean Absolute Scaled Error 
+To measure the accuracy of the predicted values, we calculate the Mean absolute 
+scale error (MASE) for each trajectory (incidence and relative
+transmission rate) generated from the sampling procedure. Incidence trajectories
+are compared to daily case counts; whereas relative transmission rates are 
+contrasted to mobility indexes. We present the results graphically (violin 
+plots) and numerically (tables). Dotted lines in the plots indicate the 
+performance threshold (1). Values below the unity indicate good performance.
 
 ```{r}
 mase_inc <- imap_dfr(sim_incidences_list, mase_per_iter, 
@@ -659,8 +744,9 @@ ggplot(mase_mob, aes(x = order, y = mase)) +
               colour = STH_colour, size = 0.5, linetype = "dashed") +
   geom_hline(yintercept = 1, linetype = "dotted", colour = "grey50") +
   theme_pubr() +
-  labs(subtitle = "Mobility prediction accuracy",
-       x        = "Delay order")
+  labs(subtitle = "Accuracy of the predicted transmission rate",
+       x        = "Delay order",
+       y        = "MASE [Unitless]")
 ```
 
 
@@ -673,7 +759,12 @@ wide_smy_mob <- summary_mase_mob %>%
 knitr::kable(wide_smy_mob, "latex", booktabs = TRUE)
 ```
 
-## Estimates
+\newpage
+
+## Posterior distribution
+
+In this section, we summarise (graphically and numerically) the parameter 
+samples obtained from the HMC algorithm.
 
 ```{r, fig.height = 5}
 source("./R_scripts/R_estimates.R")
@@ -717,8 +808,10 @@ knitr::kable(summary_est, "latex", booktabs = TRUE, escape = FALSE)
 
 # Prediction of hidden states
 
-Based on the results above, we select the structure of order 5 as the model for
-predicting hidden states.
+Based on the results above, we select the 4th-order information delay structure
+as DGP3's process model to predict latent states.
+
+\hfill
 
 ```{r}
 inc_df <- sim_incidences_list[[5]] %>% select(-order, -variable)
@@ -741,7 +834,7 @@ pred_inc <- wkl_df %>% group_by(week) %>%
   pivot_wider(names_from = lims, values_from = vals)
 
 g1 <- plot_wkl_fit(pred_inc, wkl_inc, "C[t]^w", "Incidence fit", 
-                   shape = 18, STH_colour)
+                   shape = 16, STH_colour)
 ```
 
 ```{r}
@@ -773,28 +866,6 @@ zeta_df <- pst_df %>% select(zeta) %>%
 mob_df %>% rename(Z = value) %>% left_join(zeta_df, by = "iter") %>% 
   mutate(beta = zeta * Z,
          R    = estimate_r(beta)) -> R_df
-
-R_df %>% mutate(week = time / 7) %>% 
-  group_by(week) %>% 
-    summarise(q50 = median(R), vals = quantile(R, c(0.025, 0.975)),
-            lims = c("q2.5", "q97.5")) %>% 
-  pivot_wider(names_from = lims, values_from = vals) -> summary_R
-
-ggplot(summary_R, aes(x = week, y = q50)) +
-  geom_line(colour = "steelblue") +
-  geom_ribbon(alpha = 0.25, aes(ymin = q2.5, ymax = q97.5),
-              fill = "steelblue") +
-  labs(y = parse(text = "R[t]"), x = "Week",
-       title = "Basic reproductive number")+
-  scale_x_continuous(breaks = 1:11) +
-  theme_pubr() +
-  theme(axis.title = element_text(size = 8, colour = "grey40"),
-        axis.text  = element_text(colour = "grey60", size = 6),
-        plot.title = element_text(size = 9, colour = "grey25"),
-        axis.ticks = element_line(colour = "grey60")) -> g3
-```
-
-```{r}
 S_df %>% mutate(s = value / 4937796) -> s_df
 
 bind_cols(R_df[, c("iter", "week", "R")], select(s_df, s)) %>% 
@@ -807,10 +878,10 @@ summary_Re <- Re_df %>% group_by(week) %>%
 
 
 ggplot(summary_Re, aes(x = week, y = q50)) +
-  geom_hline(yintercept = 1, colour = "grey60", linetype = "dashed") +
-  geom_line(colour = "steelblue") +
+  geom_hline(yintercept = 1, colour = ET_colour, linetype = "dashed") +
+  geom_line(colour = STH_colour) +
   geom_ribbon(alpha = 0.25, aes(ymin = q2.5, ymax = q97.5),
-              fill = "steelblue") +
+              fill = STH_colour) +
   geom_vline(xintercept = 1.86, colour = "grey50", linetype = "dotted") +
   annotate("text", x = 1.96, y = 6, size = 1.5,
              label = "Delay phase", hjust = 0, size = 3, colour = "grey50") +
@@ -821,14 +892,15 @@ ggplot(summary_Re, aes(x = week, y = q50)) +
        title = "Effective reproductive number")+
   scale_x_continuous(breaks = 1:11) +
   theme_pubr()  +
-  theme(axis.title = element_text(size = 8, colour = "grey40"),
-        axis.text  = element_text(colour = "grey60", size = 6),
-        plot.title = element_text(size = 9, colour = "grey25"),
-        axis.ticks = element_line(colour = "grey60"))-> g4
+  theme(axis.title = element_text(colour = "grey40"),
+        axis.text  = element_text(colour = "grey60"),
+        plot.title = element_text(colour = "grey25"),
+        axis.ticks = element_line(colour = "grey60"),
+        axis.line  = element_line(colour = "grey60"))-> g3
 ```
 
-```{r}
-(g1 / g2) | (g3 / g4)
+```{r, fig.height = 8}
+g1 / g2  / g3
 ```
 
 
@@ -842,10 +914,9 @@ tidy_pars_df %>% filter(order == 5) %>% select(-order) %>%
   pivot_wider(names_from = lims, values_from = vals) -> est_df
 
 
-results_list <- list(label         = "M3 (SM4)",
+results_list <- list(label         = "3 (SM4)",
                      sim_inc       = pred_inc,
                      sim_mob       = summary_mob,
-                     R_t           = summary_R,
                      Re_t          = summary_Re,
                      estimates_df  = est_df)
 
@@ -853,4 +924,17 @@ fn <- file.path(folder, "predictions.rds")
 
 if(!file.exists(fn)) saveRDS(results_list, fn)
 ```
+
+# Computational time
+
+```{r}
+imap_dfr(time_list, function(time_val, order) {
+  data.frame(order = order, time = time_val)
+}) -> time_df
+
+tt <- sum(time_df$time) %>% round(0)
+
+plot_time_comparison(time_df, tt)
+```
+
 
