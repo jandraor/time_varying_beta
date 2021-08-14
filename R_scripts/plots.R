@@ -56,17 +56,17 @@ daily_epicurve <- function(irish_data, formatted_tc) {
              label = "Stay at home", hjust = 0, size = 3, colour = "grey50") +
     labs(x     = "Date of Lab specimen collection",
          y     = "Incidence [new cases per day]",
-         title = "Daily epicurve",
+         title = "Daily detected cases",
          subtitle = str_glue("Total cases: {formatted_tc}")) +
     theme(plot.subtitle = element_text(size = 8, colour = "grey60"),
-          plot.title = element_text(size = 9, colour = "grey39"),
+          plot.title = element_text(size = 9, colour = "grey10"),
           axis.title = element_text(size = 8, colour = "grey40"),
           axis.line  = element_line(colour = "grey80"),
           axis.text  = element_text(colour = "grey60", size = 6),
           axis.ticks = element_line(colour = "grey60"))
 }
 
-daily_epi_trend <- function(irish_data) {
+daily_epi_trend <- function(irish_data, title) {
   
   ggplot(irish_data, aes(x = date, y = y)) +
     geom_vline(xintercept = as_date("2020-02-29") + 13, colour = "grey50",
@@ -79,7 +79,7 @@ daily_epi_trend <- function(irish_data) {
              label = "Stay at home", hjust = 0, size = 3, colour = "grey50") +
     labs(x = "Date of Lab specimen collection",
          y = "Incidence [new cases per day]",
-         title = "A) Daily detected cases") +
+         title = title) +
     geom_point(colour = data_colour, size = 0.75, shape = 18, alpha = 0.95) +
     geom_line(stat="smooth", method = "loess", formula = y ~ x, alpha = 0.25,
               colour = data_colour, span = 0.25, size = 1) +
@@ -88,17 +88,17 @@ daily_epi_trend <- function(irish_data) {
           axis.text  = element_text(colour = "grey60", size = 6),
           plot.title = element_text(size = 9, colour = "grey10"),
           axis.ticks = element_line(colour = "grey60"),
-          axis.line =  element_line(colour = "grey60"))
+          axis.line =  element_line(colour = "grey80"))
 }
 
-weekly_epicurve <- function(wkl_data) {
+weekly_epicurve <- function(wkl_data, title) {
   ggplot(wkl_data, aes(x = week, y = y)) +
     geom_col(fill = data_colour) +
     scale_x_continuous(breaks = 0:12) +
     theme_pubclean() +
     labs(y = "Incidence [new cases per week]",
          x = "Week of Lab specimen collection",
-         title = "C) Weekly detected cases") +
+         title = title) +
   theme_pubr() +
     theme(plot.title = element_text(size = 9),
           axis.line  = element_line(colour = "grey80"),
@@ -115,22 +115,28 @@ incidence_graphs <- function(irish_data, formatted_tc, wkl_inc) {
   (g1/g2) | g3
 }
 
-driving_missing_data <- function(raw_data) {
-  ggplot_na_distribution(raw_data) +
-    labs(title = "Ireland's driving data",
-         y = "Index",
+plot_imputed_mob <- function(data, raw_data, imputed_data) {
+  
+  imp_df <- data.frame(time         = dates,
+                       raw_data     = raw_data,
+                       imputed_data = imputed_data) %>% 
+    mutate(is.imp = ifelse(is.na(raw_data), "imputed values", "known values"))
+  
+  ggplot(imp_df, aes(x = time, y = imputed_data)) +
+    geom_line(colour = data_colour, alpha = 0.3) +
+    geom_point(shape = 16, aes(colour = is.imp)) +
+    scale_colour_manual(values = c("blue", data_colour), name = "") +
+    theme_pubr() +
+    labs(x = "Date", y = "Index",
+         title = "Ireland's driving data",
+         subtitle = "Missing data has been replaced by linear interpolation estimates",
          caption = "This dataset has been normalised by its initial value (141)") +
-    theme_pubclean() +
-    theme(plot.caption = element_text(colour = "grey70"))
-}
-
-imputed_driving_data <- function(raw_data, imputed_data) {
-  ggplot_na_imputations(raw_data, imputed_data) +
-    labs(title = "Ireland's driving data",
-         y = "Index",
-         caption = "Missing data has been replaced by linear interpolation estimates") +
-    theme_pubclean() +
-    theme(plot.caption = element_text(colour = "grey70"))
+    theme(plot.subtitle = element_text(colour = "grey65"),
+          plot.caption  = element_text(colour = "grey65"),
+          axis.title = element_text(colour = "grey40"),
+          axis.line  = element_line(colour = "grey80"),
+          axis.text  = element_text(colour = "grey60"),
+          axis.ticks = element_line(colour = "grey60"))
 }
 
 plot_daily_mobility <- function(daily_mob_df) {
@@ -167,54 +173,59 @@ plot_daily_data <- function(irish_data, drv_df) {
   g1 / g2
 }
 
-loglik_traces <- function(traces_df, lims) {
+loglik_traces <- function(traces_df, lims, traces_col) {
+  
   traces_df %>% filter(variable == "loglik") %>% 
     ggplot(aes(x = iteration,y = value,group = L1))+
-    geom_line(colour = "purple", alpha = 0.25)+
+    geom_line(colour = traces_col, alpha = 0.25)+
     scale_y_continuous(limits = lims) +
     guides(color=FALSE) +
     labs(x = "Iteration", y = "Log-likelihood") +
     theme_pubclean()
-}
 
-loglik_se_sens <- function(sens_results) {
+  }
+
+loglik_se_sens <- function(sens_results, DGP_colour) {
   ggplot(sens_results, aes(x = Np, y = loglik.se)) +
     scale_x_log10(labels = comma) +
-    geom_line(colour = "grey90") +
-    geom_smooth(se = FALSE) +
-    geom_point() +
+    geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.5,
+              colour = DGP_colour, span = 0.75, size = 1, linetype = "dashed") + 
+    geom_point(colour = DGP_colour, size = 4) +
     theme_pubclean() +
     labs(y = "Log-likelihood SE", x = "Number of particles (Log scale)")
 }
 
-mif_traces <- function(traces_df, unknown_pars) {
+mif_traces <- function(traces_df, unknown_pars, traces_col) {
   traces_df %>% 
     filter(variable %in% c("loglik", unknown_pars)) %>%
     ggplot(aes(x= iteration,y = value, group = L1))+
-    geom_line(color = "steelblue", alpha = 0.25) +
+    geom_line(color = traces_col, alpha = 0.25) +
     theme_pubr() +
     scale_y_continuous(labels = comma) +
     labs(y = "Value", x = "Iteration") +
     facet_wrap(~variable,scales = "free_y", labeller = label_parsed)
 }
 
-raw_likelihood <- function(all_df, var_x) {
+raw_likelihood <- function(all_df, var_x, point_colour) {
   
   var_x <- as.character(var_x)
+  lab_x <- var_x
+  lab_x <- ifelse(lab_x == "P_0", "P[0]", lab_x)
   
   all_df %>%
     filter(type == "result") %>%
     ggplot(aes(x = !!ensym(var_x), y = loglik))+
-    geom_point(colour = "grey50")+
+    geom_point(colour = point_colour)+
     theme_pubr() +
-    geom_smooth(se = FALSE) +
+    geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.25,
+              colour = point_colour, span = 0.75, size = 1) +
     labs(
-      x = parse(text = var_x),
-      title = "Raw profile likelihood"
-    )
+      x = parse(text = lab_x))
 }
 
-profile_plot <- function(profile_df, prof_var, maxloglik, ci_cutoff) {
+# Axis text size (ats)
+profile_plot <- function(profile_df, prof_var, maxloglik, ci_cutoff, est_colour,
+                         ats = 11) {
   
   prof_var <- as.character(prof_var)
   
@@ -224,20 +235,42 @@ profile_plot <- function(profile_df, prof_var, maxloglik, ci_cutoff) {
     filter(rank(-loglik)< 3) %>%
     ungroup() %>%
     ggplot(aes(x = !!ensym(prof_var),y = loglik))+
-    geom_point(colour = "grey50")+
-    geom_smooth(method = "loess", se = FALSE)+
+    geom_point(colour = est_colour, size = 0.5)+
+    geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.25,
+              colour = est_colour, span = 0.75, size = 0.8) +
     geom_hline(color = "red", yintercept = ci_cutoff, linetype = "dashed")+
     lims(y = maxloglik - c(5,0))+
-    labs(y = "Log-likelihood", x = parse(text = prof_var),
+    labs(y = "Log-lik", x = parse(text = prof_var),
          subtitle = "Unadjusted profile") +
-    theme_pubr()
+    theme_pubr() +
+    theme(axis.line  = element_line(colour = "grey80"),
+          axis.text  = element_text(colour = "grey60", size = ats),
+          axis.ticks = element_line(colour = "grey60"))
 }
 
-plot_guesses <- function(guesses_df, point_size = 1) {
-  aes_points <- list(continuous = wrap("points", alpha = 0.5, size = point_size,
-                                       colour = "steelblue"))
+plot_MCAP <- function(prof_ll, var_name, span = 0.75, est_colour,
+                      axis_text_size = 11){
   
-  guesses_df <- rename(guesses_df, `P(0)` = `P_0`)
+  var_name <- as.character(var_name)
+  
+  ggplot(prof_ll, aes(x = !!ensym(var_name), y = loglik)) +
+    geom_point(alpha = 0.7, colour = est_colour, size = 0.3) +
+    geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.25,
+              colour = est_colour, span = span, size = 0.5) +
+    geom_hline(yintercept = cut_off_smth, colour = "red", linetype = "dotted") +
+    labs(y = "Log-lik", x = parse(text = var_name),
+         subtitle = "MCAP") +
+    theme_pubr() +
+    theme(axis.line  = element_line(colour = "grey80"),
+          axis.text  = element_text(colour = "grey60", size = axis_text_size),
+          axis.ticks = element_line(colour = "grey60"))
+}
+
+plot_guesses <- function(guesses_df, point_size = 1, point_colour) {
+  aes_points <- list(continuous = wrap("points", alpha = 0.5, size = point_size,
+                                       colour = point_colour))
+  
+  guesses_df <- rename(guesses_df, `P[0]` = `P_0`)
   
   ggpairs(guesses_df, 
           upper = aes_points,
@@ -246,19 +279,6 @@ plot_guesses <- function(guesses_df, point_size = 1) {
           labeller = label_parsed) +
     theme_pubr() +
     theme(axis.text = element_text(size = 6))
-}
-
-plot_MCAP <- function(prof_ll, var_name, span = 0.75){
-  
-  var_name <- as.character(var_name)
-  
-  ggplot(prof_ll, aes(x = !!ensym(var_name), y = loglik)) +
-    geom_point(alpha = 0.7, colour = "grey50") +
-    geom_smooth(span = span, se = FALSE) +
-    geom_hline(yintercept = cut_off_smth, colour = "red", linetype = "dotted") +
-    labs(y = "Log-likelihood", x = parse(text = var_name),
-         subtitle = "MCAP") +
-    theme_pubr()
 }
 
 plot_priors <- function(){
@@ -298,9 +318,13 @@ plot_priors <- function(){
   (g1 + g2) / (g3 + g4)
 }
 
-plot_lik_surface <- function(tidy_ll_df) {
+plot_lik_surface <- function(tidy_ll_df, point_colour) {
+  
+  tidy_ll_df <- mutate(tidy_ll_df, 
+                       name = ifelse(name == "P_0","P[0]", name))
+  
   ggplot(tidy_ll_df, aes(x = value, y = loglik)) +
-    geom_point(colour = "grey50", alpha = 0.75) +
+    geom_point(colour = point_colour, alpha = 0.75) +
     facet_wrap(~name, scales = "free", labeller = label_parsed) +
     geom_hline(yintercept = cutoff, linetype = "dashed", colour = "red") +
     theme_pubr() 

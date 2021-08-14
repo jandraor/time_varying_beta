@@ -33,10 +33,16 @@ get_par_summary <- function(est_list) {
     select(-name) %>% unlist()
   
   R_estimates <- estimate_r(zeta_estimates) %>% bind_rows()
-  R_row       <- data.frame(name = "R(0)") %>% bind_cols(R_estimates)
+  R_row       <- data.frame(name = "Re_0") %>% bind_cols(R_estimates)
   
-  par_summary <- bind_rows(par_summary, R_row) %>% 
-    mutate(name = ifelse(name == "P_0", "P(0)", name)) # formatting
+  par_summary <- bind_rows(par_summary, R_row) 
   
   par_summary
+}
+
+
+format_names_latex <- function(df) {
+  df %>% 
+    mutate(Parameter = ifelse(Parameter == "P_0", "$P_0$", 
+                              paste0("$\\",Parameter, "$"))) # formatting
 }
