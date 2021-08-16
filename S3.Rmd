@@ -3,6 +3,14 @@ title: "S3 Appendix"
 output: pdf_document
 ---
 
+The purpose of this short appendix is to facilitate reproducibility. Throughout
+this research, all results stem from R Markdown documents so that users 
+(including us) can identify the source code that produces any specific outcome. 
+Here, we compare the predicted latent states by each of the
+three Data Generating Processes.
+
+\hfill
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE,
                       warning = FALSE)
