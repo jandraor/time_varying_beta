@@ -153,5 +153,25 @@ plot_MLE_neighbourhood <- function(df, col) {
 
 }
 
+plot_daily_fit <- function(pred_df, data_df, y_lab, shape) {
+  
+  ggplot(pred_df, aes(x = time, y = q50)) +
+    geom_line(colour = GBM_colour) +
+    scale_y_continuous(labels = comma) +
+    geom_ribbon(alpha = 0.2, aes(ymin = q2.5, ymax = q97.5),
+                fill = GBM_colour) +
+    geom_ribbon(alpha = 0.5, aes(ymin = q25, ymax = q75),
+                fill = GBM_colour) +
+    geom_point(data = data_df, aes(y = y), colour = data_colour,
+               size = 2, shape = shape, alpha = 0.95) +
+    theme_pubr() +
+    labs(x = "Day", y = parse(text = y_lab)) +
+    theme(axis.title = element_text(size = 8, colour = "grey40"),
+          axis.text  = element_text(colour = "grey60", size = 6),
+          plot.title = element_text(colour = "grey25", size = 8),
+          axis.ticks = element_line(colour = "grey60", size = 0.25),
+          axis.line  = element_line(colour = "grey60", size = 0.25))
+}
+
 
 

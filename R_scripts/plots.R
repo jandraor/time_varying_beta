@@ -369,3 +369,46 @@ plot_traces <- function(sf) {
     facet_wrap(~parameter, labeller = label_parsed, scales = "free")
 }
 
+plot_loglik_sens <- function(sens_df, ant_df) {
+  
+  ggplot(sens_df, aes(x = Np, y = loglik)) +
+    scale_x_log10(labels = trans_format("log10", math_format(10^.x))) +
+    geom_point(colour = GBM_colour) +
+    geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.15,
+              colour = GBM_colour, size = 1) +
+    geom_text(data = ant_df, aes(label = lbl, x = 10e3, y = -1300), size = 3,
+              colour = "grey40") +
+    facet_wrap(~set_id) +
+    labs(x = "Number of particles (Log scale)",
+         y = "Log-likelihood") +
+    theme_pubr() +
+    theme(strip.background = element_blank(),
+          strip.text = element_blank(),
+          panel.border = element_rect(colour = "grey95", fill = NA, size = 0.5),
+          axis.text = element_text(size = 8, colour = "grey50"),
+          axis.line  = element_line(colour = "grey60"),
+          axis.ticks = element_line(colour = "grey60"))
+}
+
+plot_SE_sens_by_set <- function(sens_df, ant_df) {
+  
+  ggplot(sens_df, aes(x = Np, y = loglik.se)) +
+    scale_x_log10(labels = trans_format("log10", math_format(10^.x))) +
+    scale_y_continuous(limits = c(0, 200)) +
+    geom_point(colour = GBM_colour) +
+    geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.15,
+              colour = GBM_colour, size = 1) +
+    geom_text(data = ant_df, aes(label = lbl, x = 10e3, y = 180), size = 3,
+              colour = "grey40") +
+    facet_wrap(~set_id) +
+    labs(x = "Number of particles (Log scale)", y = "Log-lik SE") +
+    theme_classic() +
+    theme(strip.background = element_blank(),
+          strip.text = element_blank(),
+          panel.border = element_rect(colour = "grey95", fill = NA, size = 0.5),
+          axis.text = element_text(size = 8, colour = "grey50"),
+          axis.line  = element_line(colour = "grey60"),
+          axis.ticks = element_line(colour = "grey60"))
+}
+
+

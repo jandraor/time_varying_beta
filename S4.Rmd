@@ -7,12 +7,20 @@ header-includes:
   - \usepackage{booktabs}
 ---
 
+According to the literature, *"models should be fit to raw, disaggregated data 
+whenever possible and never to temporally accumulated data"*. In the main text,
+we fitted DGP1 and DGP2 to weekly data instead of to raw daily data. In this 
+appendix, we provide the rationale for following such approach.
+
+\tableofcontents 
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 
 library(doParallel)
 library(doRNG)
 library(dplyr)
+library(kableExtra)
 library(imputeTS)
 library(lubridate)
 library(pomp)
@@ -23,11 +31,77 @@ library(tidyr)
 library(stringr)
 library(tictoc)
 
+source("./R_scripts/plots.R")
 folder <- "./Saved_objects/Irish_data/SEI3R_GBM/mdl_1"
 ```
 
 
-# Daily case counts
+\newpage
+
+# Sensitivity test (Daily case counts)
+
+As stated in S1, it is critical to obtain robust likelihood values for 
+performing statistical inference on State-Space Models. Here, we test the 
+robustness of the particle filter on a modified version of DGP1 (See S1). The
+modification refers to the measurement model which accounts for daily 
+measurements rather than weekly ones.
+
+## Process model
+
+\begin{equation}
+    \frac{dS}{dt} = - S_t \lambda_t
+\end{equation}
+
+\begin{equation}
+   \frac{dE}{dt} = S_t \lambda_t - \sigma E_t
+\end{equation}
+
+\begin{equation}
+   \frac{dP}{dt} = \omega \sigma E_t - \eta P_t
+\end{equation}
+
+\begin{equation}
+   \frac{dI}{dt} =  \eta P_t - \gamma I_t
+\end{equation}
+
+\begin{equation}
+   \frac{dA}{dt} =  (1-\omega) \sigma E_t - \kappa A_t
+\end{equation}
+
+\begin{equation}
+   \frac{dR}{dt} =  \kappa A_t - \gamma I_t
+\end{equation}
+
+\begin{equation}
+   \lambda_t =  \frac{ \beta_t(I_t + P_t + \mu A_t)}{N_t} 
+\end{equation}
+
+\begin{equation}
+   \beta_t = \zeta Z_t
+\end{equation}
+
+\begin{equation}
+   \color{red}
+   \frac{dZ}{dt} =  \alpha Z_t dW 
+\end{equation}
+
+\begin{equation}
+   dW \sim Normal(0, \sqrt{dt})
+\end{equation}
+
+\begin{equation}
+   \frac{dC^d}{dt} =  \eta P_t - C^d_t \delta(t \, mod \, 1)
+\end{equation}
+
+## Observational model
+
+\begin{equation}
+  y^3_t \sim Pois(C^d_t) 
+\end{equation}
+
+\begin{equation}
+  y^4_t \sim Normal(Z_t, \tau) 
+\end{equation}
 
 ```{r}
 source("./R_scripts/irish_data.R")
@@ -53,14 +127,38 @@ params   <- par_obj$all
 pomp_mdl <- get_POMP_model(daily_df, params, 1 / 128)
 ```
 
+## MLE neighbourhood
+
+In S1, we describe the process to infer DGP1's fixed parameters. In so doing, we
+construct a likelihood surface from which we extract ten parameter sets that
+yield the largest likelihood. The table below display such sets.
+
+\hfill
+
+```{r}
+path      <- "./Saved_objects/Irish_data/SEI3R_GBM/weekly/mdl_2/top_10.csv"
+test_pars <- read_csv(path)
+pars_list <- transpose(test_pars)
+
+
+kable_df           <- test_pars
+old_names          <- colnames(kable_df)
+new_names          <- ifelse(old_names == "P_0", 
+                             paste0("$",old_names , "$"),
+                             paste0("$\\",old_names , "$"))
+                               
+colnames(kable_df) <- new_names
+
+kable_df <- kable_df %>% mutate(id = row_number(), .before = everything())
+  
+
+knitr::kable(kable_df, "latex", booktabs = TRUE,
+             escape = FALSE, digits = 3)
+```
 
 ```{r}
 source("./R_scripts/likelihood_funs.R")
 source("./R_scripts/helpers.R")
-
-path <- "./Saved_objects/Irish_data/SEI3R_GBM/weekly/mdl_2/top_10.csv"
-test_pars <- read_csv(path)
-pars_list <- transpose(test_pars)
 
 imap_dfr(pars_list, function(pars_set, i) {
   n_particles <- c(5e3, 1e4, 2e4)
@@ -76,26 +174,75 @@ imap_dfr(pars_list, function(pars_set, i) {
 }) -> sens_df
 ```
 
+## Prediction test
+
+Initially, we run once the particle filter with the MLE (id = 1) and notice that
+the filtering distribution produces an adequate fit to both sets of data 
+(incidence and mobility).
+
+\hfill
+
+
 ```{r}
-library(ggplot2)
-library(ggpubr)
-ggplot(sens_df, aes(x = Np, y = loglik)) +
-  scale_x_log10() +
-  geom_point(colour = "#C7C2F9") +
-  geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.15,
-            colour = "#C7C2F9", size = 1) +
-  facet_wrap(~set_id) +
-  theme_pubr()
+set.seed(123)
+
+fp <- file.path(folder, "pred_test.rds")
+
+if(!file.exists(fp)) {
+  MLE         <- c(unlist(pars_list[[1]]), par_obj$fixed)
+  MLE_pf      <- pomp::pfilter(pomp_mdl, params = MLE, Np = 1e5,
+                               save.states = TRUE)
+  filt_states <- saved.states(MLE_pf)
+  saveRDS(filt_states, fp)
+} else{
+  filt_states <- readRDS(fp)
+}
 ```
 
 ```{r}
-ggplot(sens_df, aes(x = Np, y = loglik.se)) +
-  scale_x_log10() +
-  scale_y_log10() +
-  geom_point(colour = "#C7C2F9") +
-  geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.15,
-            colour = "#C7C2F9", size = 1) +
-  facet_wrap(~set_id, scales = "free_y") +
-  theme_pubr()
+source("./R_scripts/filt_dist_utils.R")
+pred_C <- summarise_filt_distr(filt_states, "C")
+pred_Z <- summarise_filt_distr(filt_states, "Z")
 ```
+
+```{r}
+data_df <- rename(daily_df, y = y1)
+g1 <- plot_daily_fit(pred_C, data_df, "C[t]^d", 18)
+
+data_df <- rename(daily_df, y = y2)
+g2 <- plot_daily_fit(pred_Z, data_df, "Z[t]", 16)
+
+g1/g2
+```
+
+## Convergence test
+
+However, it is not sufficient to obtain accurate fits to the data. In addition
+to this, each run must be accompanied by reliable likelihood estimates. 
+Accordingly, we run fourteen times the particle filter with the ten parameter
+sets shown above for various number of particles. It is expected that the
+likelihood value converges asymptotically to the _real_ value and the 
+log-likelihood error approximates zero as the number of particle increases. In
+stark contrast, the results show that the likelihood grows as the number of
+particles increases, and the log-likelihood error exhibit erratic trends. in
+a nutshell, we cannot use this alternative formulation for parameter inference.
+
+\hfill
+
+```{r, fig.height = 3.5}
+ant_df <- data.frame(set_id = 1:10, lbl = str_glue("id: {1:10}"))
+
+plot_loglik_sens(sens_df, ant_df)
+```
+
+\hfill
+
+```{r, fig.height = 3.5}
+ant_df <- data.frame(set_id = 1:10, lbl = str_glue("id: {1:10}"))
+
+plot_SE_sens_by_set(sens_df, ant_df)
+```
+
+
+
 

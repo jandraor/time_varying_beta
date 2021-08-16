@@ -225,14 +225,14 @@ pomp_mdl <- pomp_SEI3R_GBM2(wkl_df, params, 1 / 128)
 
 ## Particle filter convergence test
 
-A critical requirement for robust parameter inference on State-Space Models is 
-the precision of likelihood estimates. Namely, that from different runs from a
-single set of parameters, we obtain similar likelihood estimates. In the light 
+A critical requirement for parameter inference on State-Space Models is 
+the robustness of likelihood estimates. Namely, that different runs, from a
+single set of parameters, yield similar log-likelihood values. In the light 
 of this requirement, we run fourteen times the particle filter with a single
 set of arbitrary parameters, and then repeat the process for various number of 
 particles. From this exploratory test, we expect the log-likelihood error
-decreases as the number of particle increases (convergence), as evidenced below.
-This result allow us to continue with the inference process.
+to decrease as the number of particle increases (convergence), as evidenced 
+below. This result allow us to continue with the inference process.
 
 \hfill
 
