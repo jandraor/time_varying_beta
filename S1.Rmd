@@ -1778,7 +1778,10 @@ pairs(~loglik + zeta + P_0 + tau + alpha + nu + upsilon, data = gr_CIR_df,
 
 As with DGP1, we employ the profile likelihood method to estimate DGP2's
 confidence intervals. See section 2.6.3 for the description of each step to 
-obtain the uncertainty bounds. Here, we only present the results.
+obtain the uncertainty bounds. Here, we only present the results. Notice that
+we only show the likelihood maximisation (via iterated filtering) of the initial
+effective contact rate ($\zeta$). However, this process is applied to other the
+parameters (not shown).
 
 ```{r CIR_profile_lists}
 profile_list_CIR        <- vector(mode = "list", 
@@ -1807,9 +1810,11 @@ var_name <- "zeta"
 
 \hfill
 
-```{r, fig.height = 2.5}
+```{r, fig.height = 3.5}
 raw_likelihood(gr_CIR_df, var_name, CIR_colour)
 ```
+
+\newpage
 
 ##### Exploration hypercube
 
@@ -1907,6 +1912,8 @@ profile_list_CIR[[var_name]] %>%
   filter(loglik > max(loglik)- 20)-> all
 ```
 
+\newpage
+
 ##### Confidence intervals
 
 \hfill
@@ -1969,11 +1976,11 @@ raw_likelihood(gr_CIR_df, var_name, CIR_colour)
 ```
 
 
-##### Exploration hypercube
+<!-- ##### Exploration hypercube -->
 
-\hfill
+<!-- \hfill -->
 
-\hfill
+<!-- \hfill -->
 
 
 ```{r}
@@ -1992,16 +1999,16 @@ profile_design(
 ```
 
 ```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
-plot_guesses(guesses_P_0, 0.25, CIR_colour) +
-  theme(axis.text = element_text(size = 5))
+# plot_guesses(guesses_P_0, 0.25, CIR_colour) +
+#   theme(axis.text = element_text(size = 5))
 ```
 
 
-##### Likelihood maximisation
+<!-- ##### Likelihood maximisation -->
 
-\hfill
+<!-- \hfill -->
 
-\hfill
+<!-- \hfill -->
 
 ```{r}
 source("./R_scripts/likelihood_funs.R")
@@ -2027,15 +2034,18 @@ time_row <- data.frame(par  = var_name,
 time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
-```{r, message = FALSE, fig.height = 3.5}
+```{r, message = FALSE}
 profile_mif_results <- extract_mif_results(ifp_obj)
 
 profile_mif_results %>% 
   traces() %>%
   melt() -> traces_df 
-
-mif_traces(traces_df, names(par_obj$unknown), CIR_colour)
 ```
+
+```{r, fig.height = 3.5}
+# mif_traces(traces_df, names(par_obj$unknown), CIR_colour)
+```
+
 
 ```{r}
 source("./R_scripts/likelihood_funs.R")
@@ -2126,11 +2136,11 @@ var_name <- "alpha"
 raw_likelihood(gr_CIR_df, var_name, CIR_colour)
 ```
 
-##### Exploration hypercube
+<!-- ##### Exploration hypercube -->
 
-\hfill
+<!-- \hfill -->
 
-\hfill
+<!-- \hfill -->
 
 
 ```{r, fig.height = 4, fig.width = 4.5, fig.align = 'center'}
@@ -2149,14 +2159,14 @@ profile_design(
 ```
 
 ```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
-plot_guesses(guesses_alpha, 0.25, CIR_colour)
+# plot_guesses(guesses_alpha, 0.25, CIR_colour)
 ```
 
-##### Likelihood maximisation
+<!-- ##### Likelihood maximisation -->
 
-\hfill
+<!-- \hfill -->
 
-\hfill
+<!-- \hfill -->
 
 ```{r}
 ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, nu = 0.02,
@@ -2180,15 +2190,18 @@ time_row <- data.frame(par  = var_name,
 time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
-```{r, message = FALSE, fig.height = 3.5}
+```{r, message = FALSE}
 profile_mif_results <- extract_mif_results(ifp_obj)
 
 profile_mif_results %>% 
   traces() %>%
   melt() -> traces_alpha_df 
-
-mif_traces(traces_alpha_df, names(par_obj$unknown), CIR_colour)
 ```
+
+```{r, fig.height = 3.5}
+# mif_traces(traces_alpha_df, names(par_obj$unknown), CIR_colour)
+```
+
 
 ```{r}
 source("./R_scripts/likelihood_funs.R")
@@ -2280,11 +2293,11 @@ raw_likelihood(gr_CIR_df, var_name,
                CIR_colour)
 ```
 
-##### Exploration hypercube
+<!-- ##### Exploration hypercube -->
 
-\hfill
+<!-- \hfill -->
 
-\hfill
+<!-- \hfill -->
 
 
 ```{r, fig.height = 4, fig.width = 4.5, fig.align = 'center'}
@@ -2303,14 +2316,14 @@ profile_design(
 ```
 
 ```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
-plot_guesses(guesses_tau, 0.25, CIR_colour)
+# plot_guesses(guesses_tau, 0.25, CIR_colour)
 ```
 
-##### Likelihood maximisation
+<!-- ##### Likelihood maximisation -->
 
-\hfill
+<!-- \hfill -->
 
-\hfill
+<!-- \hfill -->
 
 ```{r}
 ptb <- rw.sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, nu = 0.02,
@@ -2334,15 +2347,18 @@ time_row <- data.frame(par  = var_name,
 time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
-```{r, fig.height = 3.5}
+```{r}
 profile_mif_results <- extract_mif_results(ifp_obj)
 
 profile_mif_results %>% 
   traces() %>%
   melt() -> traces_alpha_df 
-
-mif_traces(traces_alpha_df, names(par_obj$unknown), CIR_colour)
 ```
+
+```{r, fig.height = 3.5}
+# mif_traces(traces_alpha_df, names(par_obj$unknown), CIR_colour)
+```
+
 
 ```{r}
 source("./R_scripts/likelihood_funs.R")
@@ -2432,11 +2448,11 @@ var_name <- "nu"
 raw_likelihood(gr_CIR_df, var_name, CIR_colour)
 ```
 
-##### Exploration hypercube
+<!-- ##### Exploration hypercube -->
 
-\hfill
+<!-- \hfill -->
 
-\hfill
+<!-- \hfill -->
 
 
 ```{r, fig.height = 4, fig.width = 4.5, fig.align = 'center'}
@@ -2455,15 +2471,15 @@ profile_design(
 ```
 
 ```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
-plot_guesses(guesses_nu, 0.25, CIR_colour)
+# plot_guesses(guesses_nu, 0.25, CIR_colour)
 ```
 
 
-##### Likelihood maximisation
+<!-- ##### Likelihood maximisation -->
 
-\hfill
+<!-- \hfill -->
 
-\hfill
+<!-- \hfill -->
 
 ```{r}
 ptb <- rw.sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, tau = 0.02,
@@ -2487,16 +2503,19 @@ time_row <- data.frame(par  = var_name,
 time_record_df <- bind_rows(time_record_df, time_row)
 ```
 
-```{r, fig.height = 3.5}
+```{r}
 source("./R_scripts/helpers.R")
 profile_mif_results <- extract_mif_results(ifp_obj)
 
 profile_mif_results %>% 
   traces() %>%
   melt() -> traces_df 
-
-mif_traces(traces_df, names(par_obj$unknown), CIR_colour)
 ```
+
+```{r, fig.height = 3.5}
+# mif_traces(traces_df, names(par_obj$unknown), CIR_colour)
+```
+
 
 ```{r CIR_nu_ll}
 source("./R_scripts/likelihood_funs.R")
@@ -2582,15 +2601,15 @@ var_name <- "upsilon"
 
 \hfill
 
-```{r, fig.height = 3.5}
+```{r, fig.height = 3}
 raw_likelihood(gr_CIR_df, var_name, CIR_colour)
 ```
 
-##### Exploration hypercube
+<!-- ##### Exploration hypercube -->
 
-\hfill
+<!-- \hfill -->
 
-\hfill
+<!-- \hfill -->
 
 
 ```{r, fig.height = 4, fig.width = 4.5, fig.align = 'center'}
@@ -2609,14 +2628,14 @@ profile_design(
 ```
 
 ```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
-plot_guesses(guesses_upsilon, 0.25, CIR_colour)
+#plot_guesses(guesses_upsilon, 0.25, CIR_colour)
 ```
 
-##### Likelihood maximisation
+<!-- ##### Likelihood maximisation -->
 
-\hfill
+<!-- \hfill -->
 
-\hfill
+<!-- \hfill -->
 
 ```{r}
 ptb <- rw.sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, tau = 0.02,
@@ -2647,8 +2666,10 @@ profile_mif_results <- extract_mif_results(ifp_obj)
 profile_mif_results %>% 
   traces() %>%
   melt() -> traces_upsilon_df 
+```
 
-mif_traces(traces_upsilon_df, names(par_obj$unknown), CIR_colour)
+```{r, fig.height = 3.5}
+# mif_traces(traces_upsilon_df, names(par_obj$unknown), CIR_colour)
 ```
 
 
