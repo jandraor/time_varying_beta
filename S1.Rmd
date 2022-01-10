@@ -1291,6 +1291,8 @@ map_df(1:5, function(i) {
 plot_ll_se(sens_df, CIR_colour)
 ```
 
+\newpage
+
 # Original Computing Environment
 
 ```{r}
