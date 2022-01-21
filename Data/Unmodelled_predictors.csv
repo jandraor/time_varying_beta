@@ -5,7 +5,7 @@ Duration of clinical infectiousness,\gamma^{-1},2.9,Days,Davies (2020)
 Clinical fraction,\omega,0.7,Unitless,HPSC (2020)
 Asymptomatic infectious period,\kappa^{-1},5,Days,Davies (2020)
 Population,N_0,4937796,People,United Nations (2019)
-Relative infectiousness,mu,0.5,Unitless,Davies (2020)
+Relative infectiousness,\mu,0.5,Unitless,Davies (2020)
 Initial susceptible,S_0,$N_0 - P_0$,People,Assumption
 Initial exposed,E_0,0,People,Assumption
 Initial clinical infectious,I_0,0,People,Assumption

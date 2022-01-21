@@ -1,7 +1,0 @@
-Name,Symbol,Units
-Initial effective contact rate,\zeta,People / day
-Volatility of effective contact rate,\alpha,Unitless
-Variance of the measured transmission rate,\tau,Unitless
-Initial preclinical infectious,P_0,People
-Long-term goal,\upsilon,Unitless
-Adjustment speed,\nu,$day^{-1}$
