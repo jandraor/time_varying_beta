@@ -1,9 +1,10 @@
 .Rproj.user
 .Rproj.user/
-.Rhistory
+*.Rhistory
 .RData
 .DS_Store
 *.pdf
 *.c
 *.dll
 *.isdb
+*.so
