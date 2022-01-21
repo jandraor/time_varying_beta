@@ -1,0 +1,19 @@
+Processing csv files: /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpSSDDtw/SEI3R_2_smth-202108101857-1-1091ae.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpSSDDtw/SEI3R_2_smth-202108101857-2-1091ae.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpSSDDtw/SEI3R_2_smth-202108101857-3-1091ae.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpSSDDtw/SEI3R_2_smth-202108101857-4-1091ae.csv
+
+Checking sampler transitions treedepth.
+218 of 8000 (2.7%) transitions hit the maximum treedepth limit of 10, or 2^10 leapfrog steps.
+Trajectories that are prematurely terminated due to this limit will result in slow exploration.
+For optimal performance, increase this limit.
+
+Checking sampler transitions for divergences.
+No divergent transitions found.
+
+Checking E-BFMI - sampler transitions HMC potential energy.
+E-BFMI satisfactory.
+
+Effective sample size satisfactory.
+
+Split R-hat values satisfactory all parameters.
+
+Processing complete.
+

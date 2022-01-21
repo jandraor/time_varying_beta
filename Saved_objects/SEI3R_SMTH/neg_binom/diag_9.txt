@@ -1,0 +1,17 @@
+Processing csv files: /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpQA9d0O/SEI3R_9_smth-202112142320-1-0170e1.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpQA9d0O/SEI3R_9_smth-202112142320-2-0170e1.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpQA9d0O/SEI3R_9_smth-202112142320-3-0170e1.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpQA9d0O/SEI3R_9_smth-202112142320-4-0170e1.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpQA9d0O/SEI3R_9_smth-202112142320-5-0170e1.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpQA9d0O/SEI3R_9_smth-202112142320-6-0170e1.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpQA9d0O/SEI3R_9_smth-202112142320-7-0170e1.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpQA9d0O/SEI3R_9_smth-202112142320-8-0170e1.csv
+
+Checking sampler transitions treedepth.
+Treedepth satisfactory for all transitions.
+
+Checking sampler transitions for divergences.
+No divergent transitions found.
+
+Checking E-BFMI - sampler transitions HMC potential energy.
+E-BFMI satisfactory.
+
+Effective sample size satisfactory.
+
+Split R-hat values satisfactory all parameters.
+
+Processing complete, no problems detected.
+
