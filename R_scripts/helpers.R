@@ -69,6 +69,29 @@ extract_ll_df <- function(ll_output) {
   do.call("rbind", valid_results)
 }
 
+extract_quantities_pf <- function(pf, fixed_params, unk_pars) {
+  
+  ss_pf <- saved.states(pf)
+  
+  imap_dfr(ss_pf, function(states, i) {
+    
+    trans_states_df <- states[c("C", "Z", "S"), ] |>  t() |> 
+      as.data.frame()
+    
+    calculations_df <- trans_states_df |> 
+      mutate(s = S / fixed_params[["N"]],
+             zeta = unk_pars[["zeta"]],
+             R  = estimate_r(zeta * Z),
+             Re = R * s) |>  
+      select(C, Z, R, Re) |>  
+      mutate(rep = row_number())
+    
+    tidy_df <- calculations_df |> 
+      pivot_longer(-rep, names_to = "var", values_to = "value") |> 
+      mutate(time = as.numeric(i))
+  })
+}
+
 create_stan_file <- function(stan_text, filename) {
   file_connection <- file(filename)
   writeLines(stan_text, file_connection)

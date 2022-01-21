@@ -22,6 +22,8 @@ iter_filt_profile <- function(mf1, guesses, fixed_params, perturbations,
     
     message(paste0("Number of working cores: "), getDoParWorkers())
     
+    message(paste0("Starting at ", date()))
+    
     tic.clearlog()
     tic()
     

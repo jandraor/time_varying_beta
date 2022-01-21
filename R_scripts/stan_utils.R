@@ -38,16 +38,23 @@ run_stan_file <- function(order, fit_options, backup_folder, stan_folder) {
   
     mod <- cmdstan_model(stan_fn)
     
+    n_chains <- 4
+    
+    if(!is.null(fit_options$chains)) n_chains <- fit_options$chains
+    
+    print(fit_options$init)
+    
     fit <- mod$sample(data            = fit_options$stan_d,
                       seed            = fit_options$seed,
-                      chains          = 4,
+                      chains          = n_chains,
                       parallel_chains = 4,
                       iter_warmup     = fit_options$warmup,
                       iter_sampling   = fit_options$sampling,
                       refresh         = 5,
                       save_warmup     = FALSE,
                       step_size       = fit_options$step_size,
-                      adapt_delta     = fit_options$adapt_delta)  
+                      adapt_delta     = fit_options$adapt_delta,
+                      init            = fit_options$init)  
     
     toc(quiet = FALSE, log = TRUE)
     log.lst <- tic.log(format = FALSE)
@@ -68,7 +75,7 @@ run_stan_file <- function(order, fit_options, backup_folder, stan_folder) {
   results
 }
 
-construct_incidence_df <- function(posterior_df) {
+construct_incidence_df <- function(posterior_df, dly_o) {
   extract_timeseries_var("y1_hat", posterior_df) %>% 
     mutate(order = dly_o)
 }

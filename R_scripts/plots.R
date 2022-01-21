@@ -3,10 +3,12 @@ library(GGally)
 library(ggalt)
 library(ggplot2)
 library(ggpubr)
+library(ggrepel)
 library(patchwork)
 library(scales)
 
 source("./R_scripts/plots_inference.R")
+source("./R_scripts/plots_convergence.R")
 
 data_colour <- "#FF7241"
 GBM_colour  <- "#344D77"
@@ -69,16 +71,16 @@ daily_epicurve <- function(irish_data, formatted_tc) {
 daily_epi_trend <- function(irish_data, title) {
   
   ggplot(irish_data, aes(x = date, y = y)) +
-    geom_vline(xintercept = as_date("2020-02-29") + 13, colour = "grey50",
+    geom_vline(xintercept = as_date("2020-02-29") + 13, colour = "grey55",
                linetype = "dotted") +
-    geom_vline(xintercept = as_date("2020-02-29") + 28, colour = "grey10",
+    geom_vline(xintercept = as_date("2020-02-29") + 28, colour = "grey55",
                linetype = "dotted") +
     annotate("text", x = as_date("2020-02-29") + 13.5, y = 750, size = 1.5,
-             label = "Delay phase", hjust = 0, size = 3, colour = "grey50") +
+             label = "Delay phase", hjust = 0, size = 3, colour = "grey55") +
     annotate("text", x = as_date("2020-02-29") + 28.5, y = 930, size = 1.5,
-             label = "Stay at home", hjust = 0, size = 3, colour = "grey50") +
+             label = "Stay at home", hjust = 0, size = 3, colour = "grey55") +
     labs(x = "Date of Lab specimen collection",
-         y = "Incidence [new cases per day]",
+         y = expression(y[d]^1~" [Cases per day]"),
          title = title) +
     geom_point(colour = data_colour, size = 0.75, shape = 18, alpha = 0.95) +
     geom_line(stat="smooth", method = "loess", formula = y ~ x, alpha = 0.25,
@@ -96,7 +98,7 @@ weekly_epicurve <- function(wkl_data, title) {
     geom_col(fill = data_colour) +
     scale_x_continuous(breaks = 0:12) +
     theme_pubclean() +
-    labs(y = "Incidence [new cases per week]",
+    labs(y = expression(y[w]^1~" [Cases per week]"),
          x = "Week of Lab specimen collection",
          title = title) +
   theme_pubr() +
@@ -141,18 +143,28 @@ plot_imputed_mob <- function(data, raw_data, imputed_data) {
 
 plot_daily_mobility <- function(daily_mob_df) {
   
-  daily_mob_df <- daily_mob_df %>% 
+  daily_mob_df <- daily_mob_df |>  
     mutate(time        = row_number(),
            end_of_week = ifelse(time %% 7 == 0, TRUE, FALSE)) %>% 
     filter(time <= 77)
   
   ggplot(daily_mob_df, aes(x = date, y = y)) +
+    geom_vline(xintercept = as_date("2020-02-29") + 13, colour = "grey55",
+               linetype = "dotted") +
+    geom_vline(xintercept = as_date("2020-02-29") + 28, colour = "grey55",
+               linetype = "dotted") +
+    annotate("text", x = as_date("2020-02-29") + 13.5, y = 0.8, size = 1.5,
+             label = "Delay phase", hjust = 0, size = 3, colour = "grey55") +
+    annotate("text", x = as_date("2020-02-29") + 28.5, y = 1, size = 1.5,
+             label = "Stay at home", hjust = 0, size = 3, colour = "grey55") +
     geom_point(colour = data_colour, aes(alpha = end_of_week), size = 0.5)   +
     scale_alpha_manual(values = c(0.25, 1)) +
     geom_line(stat = "smooth", method = "loess", formula = y ~ x, alpha = 0.1,
               colour = data_colour, span = 0.25, size = 1) +
-    labs(x = "Date", y = "Mobility index",
-         title = "B) Mobility trend (Driving)") +
+    scale_y_continuous(limits = c(0, 1.1)) +
+    labs(x = "Date",
+         y = expression(y[d]^1~" [Mobility index]"),
+         title = "C) Daily mobility trend (Driving)") +
     theme_pubr() +
     theme(legend.position = "none",
           axis.text  = element_text(colour = "grey60", size = 6),
@@ -163,9 +175,35 @@ plot_daily_mobility <- function(daily_mob_df) {
   
 }
 
+plot_wkl_mobility <- function(daily_mob_df) {
+  
+  weekly_mob_df <- daily_mob_df |>  
+    mutate(time        = row_number(),
+           end_of_week = ifelse(time %% 7 == 0, TRUE, FALSE)) %>% 
+    filter(end_of_week) |> 
+    mutate(week = time / 7)
+  
+  ggplot(weekly_mob_df, aes(x = week, y = y)) +
+    geom_col(fill = data_colour) +
+    scale_x_continuous(breaks = 0:12) +
+    scale_y_continuous(limits = c(0, 1.1)) +
+    theme_pubclean() +
+    labs(y = expression(y[w]^2~" [Mobility index]"),
+         x = "End of Week",
+         title = "D) Weekly mobility (Driving)") +
+    theme_pubr() +
+    theme(plot.title = element_text(size = 9),
+          axis.line  = element_line(colour = "grey80"),
+          axis.text  = element_text(colour = "grey60", size = 7),
+          axis.ticks = element_line(colour = "grey60"),
+          axis.title = element_text(size = 8, colour = "grey40"))
+}
+
 plot_daily_data <- function(irish_data, drv_df) {
   
-  g1 <- daily_epi_trend(irish_data)
+  title <- "A) Daily detected cases"
+  
+  g1 <- daily_epi_trend(irish_data, title)
   
   g2 <- plot_daily_mobility(daily_mob_df) +
     geom_point(colour = data_colour, size = 0.5)
@@ -179,7 +217,7 @@ loglik_traces <- function(traces_df, lims, traces_col) {
     ggplot(aes(x = iteration,y = value,group = L1))+
     geom_line(colour = traces_col, alpha = 0.25)+
     scale_y_continuous(limits = lims) +
-    guides(color=FALSE) +
+    guides(color = "none") +
     labs(x = "Iteration", y = "Log-likelihood") +
     theme_pubclean()
 
@@ -332,11 +370,11 @@ plot_lik_surface <- function(tidy_ll_df, point_colour) {
 
 plot_demo <- function(demo_df, title, colour) {
   
-  non_h   <- demo_df %>% filter(highlight == FALSE)
-  high_df <- demo_df %>% filter(highlight == TRUE)
-  ggplot(non_h, aes(x = week, y = beta)) +
-    geom_line(aes(group = .id), colour = colour, alpha = 0.1) +
-    geom_line(data = high_df, aes(group = .id), colour = colour) +
+  mean_df <- demo_df |> group_by(week) |> summarise(mean = mean(beta))
+  
+  ggplot(demo_df, aes(x = week, y = beta)) +
+    geom_line(aes(group = .id), colour = colour, alpha = 0.025, size = 0.5) +
+    geom_line(data = mean_df, aes(y = mean), colour = colour) +
     scale_y_continuous(limits = c(0, 10)) +
     labs(title = title,
          y     = parse(text = "beta[t]"),
@@ -361,10 +399,10 @@ plot_time_comparison <- function(time_df, tt){
 }
 
 
-plot_traces <- function(sf) {
+plot_traces <- function(sf, pars) {
   traces_cols <- c("#D8DDB7", "#F5F3E7", "#1B4D60", "#578372")
   
-  traceplot(sf, pars = c("zeta", "nu", "upsilon", "P_0")) +
+  traceplot(sf, pars = pars) +
     scale_colour_manual(values = traces_cols) +
     facet_wrap(~parameter, labeller = label_parsed, scales = "free")
 }

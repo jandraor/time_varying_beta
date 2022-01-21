@@ -11,57 +11,12 @@ get_fixed_params <- function() {
     sigma = sigma_val, eta = eta_val, kappa = kappa_val)
 }
 
-get_params <- function(mdl_id) {
+pomp_GBM <- function(incidence_mdl, mobility_mdl, obs_df, mdl_filename, dt) {
   
-  zeta_guess    <- 3 / 5
-  tau_guess     <- 1
-  B_guess       <- zeta_guess
-  P_guess       <- 1
-  alpha_guess   <- 0.1
-  nu_guess      <- 0.04
-  upsilon_guess <- 0.1
-  iota_guess    <- 1
+  mm_obj <- get_meas_mdl(incidence_mdl, mobility_mdl)
   
-  if(mdl_id == "GBM_1") {
-    unknown_pars <- c(zeta = zeta_guess, P_0 = P_guess, tau = tau_guess,
-                      alpha = alpha_guess)
-  }
-  
-  if(mdl_id == "GBM_2") {
-    unknown_pars <- c(zeta = zeta_guess, P_0 = P_guess, tau = tau_guess,
-                      alpha = alpha_guess)
-  }
-  
-  if(mdl_id == "GBM_3") {
-    unknown_pars <- c(zeta = zeta_guess, P_0 = P_guess, tau = tau_guess,
-                      alpha = alpha_guess, iota = iota_guess)
-  }
-  
-  if(mdl_id == "CIR") {
-    unknown_pars  <- c(zeta = zeta_guess, P_0 = P_guess, tau = tau_guess,
-                       nu = nu_guess, upsilon = upsilon_guess,
-                       alpha = alpha_guess)
-  }
-  
-  fixed_pars   <- get_fixed_params()
-  
-  params       <- c(fixed_pars, unknown_pars)
-  
-  list(fixed = fixed_pars,
-       unknown = unknown_pars,
-       all = params)
-}
-
-get_POMP_model <- function(obs_df, params, dt = 0.01) {
-  
-  Csnippet("
-    y1  = rpois(C);  
-    y2 = rnorm(Z, tau); 
-  ") -> rmeas
-  
-  Csnippet("
-    lik = dpois(y1,C,give_log) + dnorm(y2, Z, tau, give_log);
-  ") -> dmeas
+  rmeas <- mm_obj$rmeas
+  dmeas <- mm_obj$dmeas
   
   Csnippet("
     S = N - P_0;
@@ -87,9 +42,16 @@ get_POMP_model <- function(obs_df, params, dt = 0.01) {
     C+= (eta*P)*dt;
   ") -> SEI3R_GBM_step
   
+  
+  par_obj   <- get_params("GBM", incidence_mdl, mobility_mdl)
+  params    <- par_obj$all
   par_names <- names(params)
   
-  obs_df %>%  
+  o_names <- "y1"
+  
+  if(mobility_mdl) o_names <- c("y1", "y2")
+  
+  obs_df |>   
     pomp(
       times = "time", t0 = 0,
       rinit = rinit,
@@ -100,78 +62,21 @@ get_POMP_model <- function(obs_df, params, dt = 0.01) {
       accumvars = "C",
       rmeasure = rmeas,
       dmeasure = dmeas,
-      partrans = parameter_trans(log   = c("zeta", "P_0", "tau", "alpha")),
+      partrans = parameter_trans(log = names(par_obj$unknown)),
+      obsnames = o_names,
       cdir = ".", 
-      cfile= "SEI3R_GBM"
-    ) -> SEI3R_GBM
+      cfile = mdl_filename) -> mdl
   
+  list(mdl  = mdl,
+       pars = par_obj)
 }
 
-pomp_SEI3R_GBM2 <- function(obs_df, params, dt = 0.01) {
+pomp_CIR <- function(incidence_mdl, mobility_mdl, obs_df, mdl_filename, dt) {
   
-  Csnippet("
-    y1  = rpois(C);  
-    y2 = rnorm(Z, tau);
-  ") -> rmeas
+  mm_obj <- get_meas_mdl(incidence_mdl, mobility_mdl)
   
-  Csnippet("
-    lik = dpois(y1,C,give_log) + dnorm(y2, Z, tau, give_log);
-  ") -> dmeas
-  
-  Csnippet("
-    S = N - P_0;
-    E = 0;
-    P = P_0;
-    I = 0;
-    A = 0;
-    R = 0;
-    Z = 1;
-    C = 0;
-  ") -> rinit
-  
-  Csnippet("
-    double dW     = rnorm(0,sqrt(dt));
-    double lambda = zeta * Z * (I + P + mu * A) / N;
-    S-= (S * lambda)*dt;
-    E+= (S * lambda - sigma*E)*dt;
-    P+= (omega * sigma * E - eta * P) * dt;
-    I+= (eta * P - gamma*I)*dt;
-    R+= (gamma*I + kappa * A)*dt;
-    A+= ((1-omega) * sigma * E - kappa * A) * dt;
-    Z+= alpha*Z*dW;
-    C+= (eta*P)*dt;
-  ") -> SEI3R_GBM_step2
-  
-
-  par_names <- names(params)
-  
-  obs_df %>% 
-    pomp(
-      times = "time", t0 = 0,
-      rinit = rinit,
-      rprocess = pomp::euler(SEI3R_GBM_step2, delta.t = dt),
-      statenames = c("S", "E", "P","I", "R", "A", "C", "Z"),
-      paramnames = par_names,
-      params = params,
-      accumvars = "C",
-      rmeasure = rmeas,
-      dmeasure = dmeas,
-      partrans = parameter_trans(log   = c("zeta", "P_0", "tau", "alpha")),
-      obsnames = c("y1", "y2"),
-      cdir = ".", 
-      cfile= "SEI3R_GBM2"
-    ) -> SEI3R_GBM2
-}
-
-pomp_SEI3R_CIR <- function(obs_df, pars, dt = 0.01) {
-  Csnippet("
-    y1  = rpois(C);  
-    y2 = rnorm(Z, tau);
-  ") -> rmeas
-  
-  Csnippet("
-    lik = dpois(y1,C,give_log) + dnorm(y2, Z, tau, give_log);
-  ") -> dmeas
+  rmeas <- mm_obj$rmeas
+  dmeas <- mm_obj$dmeas
   
   Csnippet("
     S = N - P_0;
@@ -197,9 +102,19 @@ pomp_SEI3R_CIR <- function(obs_df, pars, dt = 0.01) {
     C+= (eta*P)*dt;
   ") -> SEI3R_CIR_step
   
-  par_names <- names(pars)
+  par_obj   <- get_params("CIR", incidence_mdl, mobility_mdl)
+  params    <- par_obj$all
+  par_names <- names(params)
   
-  obs_df %>% 
+  par_unk   <- names(par_obj$unknown)
+  
+  log_pars  <- par_unk[!par_unk %in% c("upsilon", "nu")]
+  
+  o_names <- "y1"
+  
+  if(mobility_mdl) o_names <- c("y1", "y2")
+  
+  obs_df |> 
     pomp(
       times = "time", t0 = 0,
       rinit = rinit,
@@ -210,69 +125,82 @@ pomp_SEI3R_CIR <- function(obs_df, pars, dt = 0.01) {
       accumvars = "C",
       rmeasure = rmeas,
       dmeasure = dmeas,
-      partrans = parameter_trans(log   = c("zeta", "P_0", "tau", "alpha"),
+      partrans = parameter_trans(log   = log_pars,
                                  logit = c("upsilon", "nu")),
-      obsnames = c("y1", "y2"),
-      cdir = ".", 
-      cfile= "SEI3R_CIR"
-    ) -> SEI3R_CIR
+      obsnames = o_names,
+      cdir     = ".", 
+      cfile    = mdl_filename
+    ) -> mdl
+  
+  
+  list(mdl  = mdl,
+       pars = par_obj)
 }
 
-pomp_SEI3R_GBM_immi <- function(obs_df, params, dt = 0.01) {
+get_params <- function(PM, incidence_mdl, mobility_mdl) {
   
-  Csnippet("
-    y1  = rpois(C);  
-    y2  = rnorm(Z, tau);
-  ") -> rmeas
+  zeta_guess    <- 3 / 5
+  tau_guess     <- 1
+  B_guess       <- zeta_guess
+  P_guess       <- 1
+  alpha_guess   <- 0.1
+  nu_guess      <- 0.04
+  upsilon_guess <- 0.1
+  phi_guess     <- 0.3
   
-  Csnippet("
-    lik = dpois(y1,C,give_log) + dnorm(y2, Z, tau, give_log);
-  ") -> dmeas
+  unknown_pars  <- c(zeta = zeta_guess, P_0 = P_guess, alpha = alpha_guess)
   
-  Csnippet("
-    S = N - P_0;
-    E = 0;
-    P = P_0;
-    I = 0;
-    A = 0;
-    R = 0;
-    Z = 1;
-    C = 0;
-  ") -> rinit
+  if(PM == "CIR") {
+    unknown_pars <- c(unknown_pars, c(nu = nu_guess, upsilon = upsilon_guess))
+  }
   
-  Csnippet("
-    double dW         = rnorm(0,sqrt(dt));
-    double beta       = zeta * Z;
-    double lambda_end = beta * (I + P + mu * A) / N;
-    double lambda_exo = (beta * iota) / N;
-    double lambda     = lambda_end + lambda_exo;
-    S-= (S * lambda)*dt;
-    E+= (S * lambda - sigma*E)*dt;
-    P+= (omega * sigma * E - eta * P) * dt;
-    I+= (eta * P - gamma*I)*dt;
-    R+= (gamma*I + kappa * A)*dt;
-    A+= ((1-omega) * sigma * E - kappa * A) * dt;
-    Z+= alpha*Z*dW;
-    C+= (eta*P)*dt;
-  ") -> SEI3R_GBM_immi_step
+  if(incidence_mdl == "Nbin") {
+    unknown_pars <- c(unknown_pars, c(phi = phi_guess))
+  }
   
-  par_names <- names(params)
+  if(mobility_mdl) {
+    unknown_pars <- c(unknown_pars, c(tau = tau_guess))
+  }
   
-  obs_df %>% 
-    pomp(
-      times = "time", t0 = 0,
-      rinit = rinit,
-      rprocess = pomp::euler(SEI3R_GBM_immi_step, delta.t = dt),
-      statenames = c("S", "E", "P","I", "R", "A", "C", "Z"),
-      paramnames = par_names,
-      params = params,
-      accumvars = "C",
-      rmeasure = rmeas,
-      dmeasure = dmeas,
-      partrans = parameter_trans(log   = c("zeta", "P_0", "tau", "alpha", 
-                                           "iota")),
-      obsnames = c("y1", "y2"),
-      cdir = ".", 
-      cfile= "SEI3R_GBM_immi"
-    ) -> SEI3R_GBM_immi
+  fixed_pars   <- get_fixed_params()
+  
+  params       <- c(fixed_pars, unknown_pars)
+  
+  list(fixed   = fixed_pars,
+       unknown = unknown_pars,
+       all     = params)
+} 
+
+get_meas_mdl <- function(incidence_mdl, mobility_mdl) {
+  
+  if(incidence_mdl == "Pois") rmeas_inc <- "y1  = rpois(C);"
+  
+  if(incidence_mdl == "Nbin") rmeas_inc <- "y1  = rnbinom_mu(C, 1 / phi);"
+  
+  if(!mobility_mdl) rmeas_text <- rmeas_inc
+  
+  if(mobility_mdl) {
+    rmeas_text <- paste(rmeas_inc, "y2  = rnorm(Z, tau);", sep = "\n")
+  }
+  
+  rmeas <- Csnippet(rmeas_text)
+  
+  #-----------------------------------------------------------------------------
+  
+  if(incidence_mdl == "Pois") dmeas_inc <- "lik = dpois(y1,C,give_log)"
+  
+  if(incidence_mdl == "Nbin") {
+    dmeas_inc <- "lik = dnbinom_mu(y1, 1 / phi, C, give_log)"
+  }
+  
+  if(!mobility_mdl) dmeas_text <- paste0(dmeas_inc, ";")
+  
+  if(mobility_mdl) {
+    dmeas_text <- paste0(dmeas_inc, " + ", "dnorm(y2, Z, tau, give_log);")
+  }
+  
+  dmeas <- Csnippet(dmeas_text)
+  
+  list(rmeas = rmeas,
+       dmeas = dmeas)
 }
