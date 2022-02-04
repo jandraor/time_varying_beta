@@ -1,52 +1,62 @@
 ---
 title: "S4 Appendix"
-output: 
-  pdf_document:
+output:
+  pdf_document: 
     number_sections: true
 header-includes:
   - \usepackage{booktabs}
+bibliography: bibliography.bib  
 ---
 
-According to the literature, *"models should be fit to raw, disaggregated data 
-whenever possible and never to temporally accumulated data"*. In the main text,
-we fitted DGP1 and DGP2 to weekly data instead of to raw daily data. In this 
-appendix, we provide the rationale for following such approach.
+This appendix aims to illustrate the inference process applied to DGP3. This
+structure consists of nine candidate deterministic process models (PM3) and an
+observational or measurement model (OM2) that accounts for the daily COVID-19 
+cases detected in Ireland's first wave. We envision this inference process in a
+Bayesian context, where the predicted values stem from DGP3's expected value,
+which is approximated using Hamiltonian Monte Carlo (HMC).
 
 \tableofcontents 
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 
-library(doParallel)
-library(doRNG)
+library(bayesplot)
+library(cmdstanr)
 library(dplyr)
-library(kableExtra)
+library(extraDistr)
 library(imputeTS)
+library(kableExtra)
 library(lubridate)
-library(pomp)
+library(Metrics)
+library(posterior)
 library(purrr)
 library(readr)
+library(readsdr)
 library(readxl)
-library(tidyr)
+library(reshape2)
+library(rstan)
 library(stringr)
 library(tictoc)
+library(tidyr)
 
+source("./R_scripts/data.R")
+source("./R_scripts/helpers.R")
+source("./R_scripts/par_summary.R")
 source("./R_scripts/plots.R")
-folder <- "./Saved_objects/Irish_data/SEI3R_GBM/mdl_1"
-```
+source("./R_scripts/R_estimates.R")
 
+folder      <- "./Saved_objects/SEI3R_SMTH"
+stan_folder <- "./Stan_files"
+data_list   <- get_data()
+obs_df      <- data_list[["Daily"]]
+```
 
 \newpage
 
-# Sensitivity test (Daily case counts)
 
-As stated in S1, it is critical to obtain robust likelihood values for 
-performing statistical inference on State-Space Models. Here, we test the 
-robustness of the particle filter on a modified version of DGP1 (See S1). The
-modification refers to the measurement model which accounts for daily 
-measurements rather than weekly ones.
+# DGP3 - Adaptive expectations
 
-## Process model
+## Process model (PM3)
 
 \begin{equation}
     \frac{dS}{dt} = - S_t \lambda_t
@@ -69,180 +79,1492 @@ measurements rather than weekly ones.
 \end{equation}
 
 \begin{equation}
-   \frac{dR}{dt} =  \kappa A_t - \gamma I_t
+   \frac{dR}{dt} =  \kappa A_t + \gamma I_t
 \end{equation}
 
 \begin{equation}
-   \lambda_t =  \frac{ \beta_t(I_t + P_t + \mu A_t)}{N_t} 
+   \lambda_t =  \frac{ \beta_t(I(_t + P_t + \mu A_t)}{N_t} 
 \end{equation}
 
 \begin{equation}
-   \beta_t = \zeta Z_t
+   \beta_t = \zeta Z^1_t
 \end{equation}
 
 \begin{equation}
-   \color{red}
-   \frac{dZ}{dt} =  \alpha Z_t dW 
+  \frac{dZ^i}{dt} = \begin{cases}
+    \frac{(\upsilon - Z^i_t)}{(\nu^{-1}/n)} \quad \textrm{for} \quad i = n\\ 
+    \\
+    \frac{(Z^{i+1}_t - Z^i_t)}{(\nu^{-1}/n)} \quad \textrm{for} \quad i < n \end{cases}
 \end{equation}
+
+Where $i \in (\mathbb{Z_+})^n$ denotes each of the stages in an $n$-order 
+information delay structure.
+
+
+## Measurement model candidates (OM2)
 
 \begin{equation}
-   dW \sim Normal(0, \sqrt{dt})
+   \frac{dC}{dt} =  \eta P_t - C_t\delta(t \, mod \, 1)
 \end{equation}
+
+### Poisson
 
 \begin{equation}
-   \frac{dC^d}{dt} =  \eta P_t - C^d_t \delta(t \, mod \, 1)
+  y_d^1\sim Pois(C_t) 
 \end{equation}
 
-## Observational model
+### Negative binomial
 
-\begin{equation}
-  y^3_t \sim Pois(C^d_t) 
-\end{equation}
+
 
 \begin{equation}
-  y^4_t \sim Normal(Z_t, \tau) 
+  y_d^1\sim NBin(C_t, \phi^{-1}) 
 \end{equation}
+
+\newpage
+
+# Inference (Poisson)
+
+## Priors
+
+For all of the nine candidate models, we adopt the following priors:
+
+\hfill
+
+```{r, fig.height = 5}
+source("./R_scripts/plots.R")
+plot_priors()
+```
+
+```{r inference_lists}
+source("./R_scripts/stan_utils.R")
+source("./R_scripts/write_SEI3R_model.R")
+n_orders            <- 9
+pars                <- c("zeta", "nu", "upsilon", "P_0")
+posterior_list      <- vector("list", n_orders)
+sim_incidences_list <- vector("list", n_orders)
+Z_list              <- vector("list", n_orders)
+ll_list             <- vector("list", n_orders)
+time_list           <- vector("list", n_orders)
+time_list_nb        <- vector("list", n_orders)
+```
+
+## Sampling
 
 ```{r}
-source("./R_scripts/irish_data.R")
-irish_data   <- get_irish_data()
+stan_d <- list(n_obs    = nrow(obs_df),
+               y1       = obs_df$y1,
+               n_params = 3,
+               n_difeq  = NA,
+               t0       = 0,
+               ts       = 1:nrow(obs_df))
+```
 
-source("./R_scripts/apple.R")
-drv_data_obj <- get_driving_data()
 
-daily_df <- data.frame(time = 1:79, 
-                       y1 = irish_data$y,
-                       y2 = drv_data_obj$df$y2)
+For validation purposes, we show the results from the sampling algorithm (HMC)
+by means of trace plots. These visualisation tools are time-series of the draws
+for a particular parameter. Here, _time_ refers to the order in which the draws 
+were sampled. These plots suggest that there are no issues in the sampling
+procedure. Further diagnostics (see the Github repository) indicate that no 
+_pathological behaviour_ was observed during the process, and adequate
+Effective Sample Sizes and potential scale reduction factors
+($\widehat{R} < 1.01$) were obtained. These outcomes suggest that the Markov
+chains converged to the posterior distribution.
+
+### 1st order delay
+
+```{r}
+dly_o <- 1 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_1}
+stan_d <- nrow(stocks)
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 931918239,
+                    warmup      = 4000,
+                    sampling    = 2000,
+                    adapt_delta = 0.90,
+                    step_size   = 0.0001) # default
+
+results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+time_list[[dly_o]] <- calculate_time(results$time)
+sf                 <- results$sf
+```
+
+```{r, fig.height = 3.5}
+plot_traces(sf, pars)
 ```
 
 ```{r}
-#===============================================================================
-# Model setup
-#===============================================================================
-
-source("./R_scripts/POMP_models.R")
-
-par_obj  <- get_params("GBM_1")
-params   <- par_obj$all
-pomp_mdl <- get_POMP_model(daily_df, params, 1 / 128)
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
 ```
 
-## MLE neighbourhood
+### 2nd order delay
 
-In S1, we describe the process to infer DGP1's fixed parameters. In so doing, we
-construct a likelihood surface from which we extract ten parameter sets that
-yield the largest likelihood. The table below display such sets.
+```{r}
+dly_o <- 2 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_2}
+stan_d <- nrow(stocks)
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 693132317,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    adapt_delta = 0.95, # default
+                    step_size   = 0.0001) 
+
+results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+time_list[[dly_o]] <- calculate_time(results$time)
+sf                 <- results$sf
+```
+
+```{r, fig.height = 3.5}
+plot_traces(sf, pars)
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+```
+
+### 3rd order delay
+
+```{r}
+dly_o <- 3 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- "./Stan_files/SEI3R_3_smth.stan"
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_3}
+stan_d <- nrow(stocks)
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 477626707,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    step_size   = 0.0001,
+                    adapt_delta = 0.95) # default
+
+results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+time_list[[dly_o]] <- calculate_time(results$time)
+sf                 <- results$sf
+```
+
+```{r, fig.height = 3.5}
+plot_traces(sf, pars)
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+```
+
+
+### 4th order delay
+
+```{r}
+dly_o <- 4 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_4}
+stan_d <- nrow(stocks)
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 986614638,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    step_size   = 0.001,
+                    adapt_delta = 0.8) # default
+
+results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+time_list[[dly_o]] <- calculate_time(results$time)
+sf                 <- results$sf
+```
+
+```{r, fig.height = 3.5}
+plot_traces(sf, pars)
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+```
+
+
+### 5th order delay
+
+```{r}
+dly_o <- 5 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_5}
+stan_d <- nrow(stocks)
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 549943389,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    step_size   = 0.001,
+                    adapt_delta = 0.8) # default
+
+results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+time_list[[dly_o]] <- calculate_time(results$time)
+sf                 <- results$sf
+```
+
+```{r, fig.height = 3.5}
+plot_traces(sf, pars)
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+S_df                         <- extract_timeseries_stock("S", posterior_df,
+                                                         stocks, "o")
+ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+```
+
+
+### 6th order delay
+
+```{r}
+dly_o <- 6 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_6}
+stan_d <- nrow(stocks)
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 846206826,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    adapt_delta = 0.90, # default
+                    step_size   = 0.001) 
+
+results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+time_list[[dly_o]] <- calculate_time(results$time)
+sf                 <- results$sf
+```
+
+```{r, fig.height = 3.5}
+plot_traces(sf, pars)
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+```
+
+### 7th order delay
+
+```{r}
+dly_o <- 7 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_7}
+stan_d <- nrow(stocks)
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 373573480,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    adapt_delta = 0.95, # default
+                    step_size   = 0.0001) 
+
+results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+time_list[[dly_o]] <- calculate_time(results$time)
+sf                 <- results$sf
+```
+
+```{r, fig.height = 3.5}
+plot_traces(sf, pars)
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+```
+
+### 8th order delay
+
+```{r}
+dly_o <- 8 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_8}
+stan_d <- nrow(stocks)
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 107900538,
+                    warmup      = 4000,
+                    sampling    = 2000,
+                    adapt_delta = 0.80, # default
+                    step_size   = 0.001) 
+
+results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+time_list[[dly_o]] <- calculate_time(results$time)
+sf                 <- results$sf
+```
+
+```{r, fig.height = 3.5}
+plot_traces(sf, pars)
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+```
+
+### 9th order delay
+
+```{r}
+dly_o <- 9 # delay order
+
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
+stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model(mdl_path, stan_path)
+```
+
+```{r fit_SMTH_9}
+stan_d <- nrow(stocks)
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 790975884,
+                    warmup      = 4000,
+                    sampling    = 2000,
+                    adapt_delta = 0.80, # default
+                    step_size   = 0.001) 
+
+results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+time_list[[dly_o]] <- calculate_time(results$time)
+sf                 <- results$sf
+```
+
+```{r, fig.height = 3.5}
+plot_traces(sf, pars)
+```
+
+```{r}
+posterior_df                 <- as.data.frame(sf)
+posterior_list[[dly_o]]      <- posterior_df
+sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
+Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
+                                                         stocks, "o")
+ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+```
+
+
+\newpage
+
+## Expected values
+
+###  Predicted incidence compared to daily case counts
+
+\hfill
+
+```{r inc_fits_g, fig.height = 7}
+data_df <- rename(obs_df, y = y1)
+plot_daily_fit_by_order(sim_incidences_list, data_df, data_shape = 18, "C[t]")
+```
+
+
+```{r, fig.height = 7}
+set.seed(19860618)
+
+map_df(sim_incidences_list, function(df) {
+    sample_iters <- sample.int(8000, 100)
+    df <- df |>  filter(iter %in% sample_iters)
+}) -> sample_incidences
+
+imap_dfr(Z_list, function(df, i) {
+  sample_iters <- sample.int(8000, 100)
+  df           <- df |>  filter(iter %in% sample_iters) |> 
+    mutate(order = i)
+}) -> sample_Z
+
+df_labels <- data.frame(x = 6, y = 750, 
+                        label = str_glue("Order: {1:9}"),
+                        order = 1:9)
+y_lab <- "C[t]"
+x_lab <- "Time since the first reported case [Days]"
+
+data_df <- rename(obs_df, y = y1)
+g1 <- plot_fits_by_order(sample_incidences, data_df, df_labels, 18, x_lab,
+                         y_lab = y_lab)
+
+
+data_df <- rename(obs_df, y = y2)
+df_labels   <- df_labels |>  mutate(x = 75, y = 0.85)
+y_lab       <- "Z[t]"
+x_lab       <- "Time since the first reported case [Days]"
+g2          <- plot_fits_by_order(sample_Z, data_df, df_labels, 16,
+                                  x_lab, y_lab)
+
+ggsave("./paper_plots/Fig_06_GSB.pdf", 
+       plot = g1 + g2, height = 7, width = 5)
+
+ggsave("./paper_plots/Fig_06_GSB.eps", 
+       plot = g1 + g2, height = 7, width = 5, device = cairo_ps)
+```
+
+
+\newpage
+
+### Predicted relative contact rate compared to mobility indexes
+
+\hfill
+
+```{r mob_fits_g, fig.height = 7}
+data_df <- rename(obs_df, y = y2)
+plot_daily_fit_by_order(Z_list, data_df, 16, "Z[t]")
+```
+
+\newpage
+
+### Likelihood by delay order
+
+\hfill
+
+```{r, fig.height = 4}
+ll_df <- imap_dfr(ll_list, function(df, i) mutate(df, order = i))
+
+plot_ll_by_order(ll_df)
+```
 
 \hfill
 
 ```{r}
-path      <- "./Saved_objects/Irish_data/SEI3R_GBM/weekly/mdl_2/top_10.csv"
-test_pars <- read_csv(path)
-pars_list <- transpose(test_pars)
+ ll_df |> rename(value = log_lik) |> 
+  var_quantiles_by_order(rnd = 1) -> kable_df
 
-
-kable_df           <- test_pars
-old_names          <- colnames(kable_df)
-new_names          <- ifelse(old_names == "P_0", 
-                             paste0("$",old_names , "$"),
-                             paste0("$\\",old_names , "$"))
-                               
-colnames(kable_df) <- new_names
-
-kable_df <- kable_df %>% mutate(id = row_number(), .before = everything())
-  
-
-knitr::kable(kable_df, "latex", booktabs = TRUE,
-             escape = FALSE, digits = 3)
+knitr::kable(kable_df, "latex", booktabs = TRUE)
 ```
+
+
+\newpage
+
+### Accuracy
+
+To measure the accuracy of the predicted values, we calculate the Mean absolute 
+scale error (MASE) for each trajectory (incidence and relative
+transmission rate) generated from the sampling procedure. Incidence trajectories
+are compared to daily case counts, whereas relative transmission rates are 
+contrasted to mobility indexes. We present the results graphically (violin 
+plots) and numerically (tables). Dotted lines in the plots indicate the 
+performance threshold (1). Values below the unity indicate good performance.
+
+\hfill
 
 ```{r}
-source("./R_scripts/likelihood_funs.R")
-source("./R_scripts/helpers.R")
+mase_inc <- imap_dfr(sim_incidences_list, mase_per_iter, 
+                     data_vector = obs_df$y1)
 
-imap_dfr(pars_list, function(pars_set, i) {
-  n_particles <- c(5e3, 1e4, 2e4)
-  fn <- file.path(folder, str_glue("pf_sensitivity_{i}.rds"))
-  pars <- c(unlist(pars_set), par_obj$fixed)
-  
-  pomp_mdl <- pomp_mdl %>% pomp(params = pars)
-  
-  pf_sensitivity(n_particles = n_particles, n_cores = 7, 
-                 seed = 873446145, pomp_mdl = pomp_mdl, fn = fn,
-                 n_iter = 14) %>% 
-    mutate(set_id = i)
-}) -> sens_df
+summary_mase <- mase_inc |>  group_by(order) |> 
+  summarise(mean   = mean(mase),
+            q_val  = quantile(mase, c(0.025, 0.25, 0.5, 0.75, 0.975)),
+            q_type = c("q2.5", "q25", "q50", "q75", "q97.5")) |> 
+  ungroup()
+
+ggplot(mase_inc, aes(x = order, y = mase)) +
+  geom_violin(aes(group = order), colour = STH_colour) +
+  scale_x_continuous(breaks = 1:9) +
+  scale_y_continuous(limits = c(0.95, 1.01)) +
+  stat_smooth(data = summary_mase, aes(x = order, y = mean),
+              geom = 'line', alpha = 0.25, se = FALSE, 
+              colour = STH_colour, size = 0.5, linetype = "dashed") +
+  geom_hline(yintercept = 1, linetype = "dotted", colour = "grey50") +
+  theme_pubr() +
+  labs(subtitle = "Incidence prediction accuracy",
+       y = "MASE [Unitless]",
+       x = "Delay order")
 ```
 
-## Prediction test
+\hfill
 
-Initially, we run once the particle filter with the MLE (id = 1) and notice that
-the filtering distribution produces an adequate fit to both sets of data 
-(incidence and mobility).
+```{r}
+wide_smy_mase <- summary_mase |> 
+  mutate(q_val = round(q_val, 3),
+         mean  = round(mean, 3)) |> 
+  pivot_wider(names_from = q_type, values_from = q_val)
+
+knitr::kable(wide_smy_mase, "latex", booktabs = TRUE)
+```
+
+
+```{r, fig.height = 3.5}
+mase_mob <- imap_dfr(Z_list, mase_per_iter, 
+                     data_vector = obs_df$y2)
+
+summary_mase_mob <- mase_mob |> group_by(order) |> 
+  summarise(mean   = mean(mase),
+            q_val  = quantile(mase, c(0.025, 0.25, 0.5, 0.75, 0.975)),
+            q_type = c("q2.5", "q25", "q50", "q75", "q97.5")) |> 
+  ungroup()
+
+ggplot(mase_mob, aes(x = order, y = mase)) +
+  geom_violin(aes(group = order), colour = STH_colour) +
+  scale_x_continuous(breaks = 1:9) +
+  stat_smooth(data = summary_mase_mob, aes(x = order, y = mean),
+              geom = 'line', alpha = 0.5, se = FALSE, 
+              colour = STH_colour, size = 0.5, linetype = "dashed") +
+  geom_hline(yintercept = 1, linetype = "dotted", colour = "grey50") +
+  theme_pubr() +
+  labs(subtitle = "Accuracy of the predicted transmission rate",
+       x        = "Delay order",
+       y        = "MASE [Unitless]")
+```
+
+\hfill
+
+```{r}
+wide_smy_mob <- summary_mase_mob |> 
+  mutate(q_val = round(q_val, 3),
+         mean  = round(mean, 3)) |> 
+  pivot_wider(names_from = q_type, values_from = q_val)
+
+knitr::kable(wide_smy_mob, "latex", booktabs = TRUE)
+```
+
+\newpage
+
+## Posterior distribution
+
+This section summarises the parameter samples obtained from the HMC algorithm. 
+The first summary corresponds to violin plots by parameter and the order of the
+delay. The second summary corresponds to a table that shows parameter means and
+standard deviations (in parenthesis) by delay order. Here, we notice that 
+standard deviations are significantly small compared to the average value 
+(mean). In other words, the probability mass is located in a low-volume and 
+high-density region of the parameter space.
 
 \hfill
 
 
+```{r, fig.height = 5}
+imap_dfr(posterior_list, function(df, i) {
+  
+  df |>  select(zeta, P_0, nu, upsilon) |> 
+    mutate(R_0 = estimate_r(zeta), iter = row_number(), order = i) |> 
+    pivot_longer(c(-iter, -order))
+}) -> tidy_pars
+
+ggplot(tidy_pars, aes(x = as.factor(order), y = value)) +
+  geom_violin(aes(group = order), colour = STH_colour) +
+  facet_wrap(~name, scales = "free", labeller = label_parsed) +
+  labs(x = "Delay order", y = "Value") +
+  theme_pubr()
+```
+
+\hfill
+
+```{r estimate_summary_t}
+pars_summary_pois <- tidy_pars |>  group_by(order, name) |> 
+  summarise(mean = sprintf("%04.2f", mean(value)),
+            sd   = sprintf("%05.3f", sd(value))) |> ungroup()
+
+summary_est <- pars_summary_pois |> mutate(value = str_glue("{mean} ({sd})")) |> 
+  select(-mean, -sd) |> 
+  pivot_wider(names_from = name, values_from = value) 
+  
+kable_df <- summary_est
+
+kable_df <- kable_df[, c("order", "R_0", "zeta", "nu", "upsilon", "P_0")]
+
+colnames(kable_df) <- c("Order", "R(0)", "$\\zeta$", "$\\nu$", "$\\upsilon$", "P(0)")
+
+knitr::kable(kable_df, "latex", booktabs = TRUE, escape = FALSE)
+```
+
+## Candidate selection
+
+In the preceding sections, we estimated performance metrics to ascertain which
+model candidate (delay order) explains the observed dynamics more accurately. 
+On the one hand, metrics of incidence accuracy (MASE) show that increasing the
+delay order leads to marginal better fits, but it also decreases the 
+log-likelihood. On the other hand, the mobility data's best fit (MASE) occurs 
+when the delay order is equal to **four**. 
+
+# Computational time
+
 ```{r}
+imap_dfr(time_list, function(time_val, order) {
+  data.frame(order = order, time = time_val)
+}) -> time_df
+
+tt <- sum(time_df$time) |> round(0)
+
+plot_time_comparison(time_df, tt)
+```
+
+\newpage
+
+# Inference (Negative binomial)
+
+## Five unknowns
+
+Misspecification in the measurement model, such as unaccounted overdispersion 
+and unmodelled variability, can lead to overly confident conclusions
+[@Breto_2018] or biased estimates. In the preceding section, we employed a 
+stringent measurement model (Poisson), which ties the observation mean and 
+variance. In this section, we replace the Poisson model with the
+_Negative Binomial_ (NBin) one, a structure that allows the DGP to handle 
+overdispersion (if present) in the observations. Although the Nbin framework is
+more flexible, it also increases the DGP's complexity by adding a new parameter:
+$\phi$. The reader should recall that as $\phi \rightarrow 0$, NBin converges
+to the Poisson distribution.
+
+In order to understand these new parameter spaces, we fit the daily incidence
+data to the nine process model candidates, which are coupled with the NBin 
+observational model. Here, we assume $\zeta$, $\nu$, $\upsilon$, $\phi$ and 
+$P_0$ as unknown parameters. For each model, we run (via Stan) **eight** Markov
+chains from different starting points.
+
+```{r}
+folder      <- "./Saved_objects/SEI3R_SMTH/neg_binom/bimodal/"
+stan_folder <- "./Stan_files/neg_binom/bimodal"
+
+walk(1:9, function(dly_o) {
+  stan_path <- str_glue("{stan_folder}/SEI3R_{dly_o}_smth.stan")
+  mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+  write_SEI3R_model2(mdl_path, stan_path)
+})
+```
+
+```{r fit_SMTH_neg_binom}
+
+seeds <- c(270343005, 37169835, 416027131, 438666980, 305525729, 63772175,
+           746136248, 344908351, 730557202)
+
+map_list <- lapply(1:9, function(dly_o) {
+  
+  mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+  mdl       <- read_xmile(mdl_path)
+  stocks    <- sd_stocks(mdl)
+  
+  stan_d <- list(n_obs  = nrow(obs_df),
+               y1       = obs_df$y1,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(obs_df))
+  
+  set.seed(seeds[[dly_o]])
+  
+  inits_df <- data.frame(zeta    = rlnorm(8),
+                         nu      = rhnorm(8, 0.1),
+                         upsilon = rhnorm(8, 0.1),
+                         P_0     = rlnorm(8),
+                         phi     = rexp(8, 6))
+  
+  inits <- transpose(inits_df)
+  
+  fit_options <- list(stan_d    = stan_d,
+                    seed        = seeds[[dly_o]],
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    chains      = 8,
+                    init        = inits)
+  
+  results               <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+  sf                    <- results$sf
+})
+```
+
+### 1st order delay
+
+#### Trace plot
+
+\hfill
+
+The results indicate that the 1st-order information delay structure coupled
+with the Nbin measurement model yields a complex bimodal posterior distribution.
+That is, chains reach either of two equilibrium regions. We support this
+assessment by the distinct pattern observed in trace plots. Light-coloured 
+chains settle on a high-density (log-likelihood) but low-volume region 
+(narrow-band chains). Conversely, dark-coloured chains settle on 
+a low-density but high-volume region. In addition to this, Stan diagnostics 
+(See Github repository) confirm such pathological behaviour in this parameter 
+space by signalling the occurrence of divergent transitions and abnormal 
+_energies_. Interestingly, Stan only detects divergences and abnormal
+energy values in the low-density/high-volume region. We thus refer to chains
+in the high-density region as _well-behaved_ chains.
+
+\hfill
+
+```{r, fig.height = 3.5}
+color_scheme_set("teal")
+
 set.seed(123)
+demo_sf     <- posterior::as_draws_array(map_list[[1]])
+row_samples <- sample.int(dim(demo_sf)[[1]], 250, replace = FALSE)
+demo_sf     <- demo_sf[row_samples,,]
 
-fp <- file.path(folder, "pred_test.rds")
+mcmc_trace_highlight(demo_sf , pars = c("zeta", "phi", "nu", "upsilon"), 
+                     highlight = 4, facet_args = list(labeller = label_parsed)) +
+  theme(legend.position = "top")
+```
 
-if(!file.exists(fp)) {
-  MLE         <- c(unlist(pars_list[[1]]), par_obj$fixed)
-  MLE_pf      <- pomp::pfilter(pomp_mdl, params = MLE, Np = 1e5,
-                               save.states = TRUE)
-  filt_states <- saved.states(MLE_pf)
-  saveRDS(filt_states, fp)
-} else{
-  filt_states <- readRDS(fp)
-}
+
+#### Posterior predictive checks
+
+\hfill
+
+Further, we consider posterior predictive checks as a more immediate appraisal. 
+That is, we compare the predicted incidence against the actual data, 
+discriminating by chain type. Here, it can be seen that, unlike the other 
+chains, samples from Chain 4 do not fit the data.
+
+
+\hfill
+
+```{r}
+posterior_df <- as.data.frame(map_list[[1]])
+sim_inc_df   <- construct_incidence_df(posterior_df, 1) |> 
+  mutate(fit = ifelse(iter >= 6001 & iter <= 8000, "no", "yes"))
+```
+
+
+```{r, fig.height = 3.5}
+set.seed(500)
+data_df <- rename(obs_df, y = y1)
+plot_fit_by_chain_type(sim_inc_df, data_df, 1)
 ```
 
 ```{r}
-source("./R_scripts/filt_dist_utils.R")
-pred_C <- summarise_filt_distr(filt_states, "C")
-pred_Z <- summarise_filt_distr(filt_states, "Z")
+vars <- c("zeta", "nu", "upsilon", "phi", "P_0", "log_lik")
+
+summary_var <- imap_dfr(map_list, function(sf,i) {
+  
+  map_df(vars, function(var) {
+    var_matrix <- extract_variable_matrix(sf, var)
+    melt(var_matrix) |> mutate(var = var)
+  }) |> mutate(order = i)
+  
+}) |> mutate(id = paste0(order, chain))
+
+log_lik_df <- summary_var |> filter(var == "log_lik") |> 
+  mutate(converges = ifelse(value < -480, "no", "yes")) |> 
+  select(chain, order, converges) |> unique() |> 
+  mutate(id = paste0(order, chain))
+
+summary_var <- left_join(summary_var, 
+                         log_lik_df[, c("id", "converges")], by = "id")
+```
+
+### All delay orders
+
+The parameter space of the other models (2nd-order to 9th-order) also 
+exhibit pathological behaviour. Below, we show the posterior
+distribution by parameter, delay order, and chain via boxplots. In these graphs,
+we see the clear-cut difference between the two probability mass regions. If we
+look at parameter $\phi$, we notice that chains settle either on low 
+overdispersion (near zero) or high overdispersion values (between 2 and 3). This
+division also corresponds to high and low-density regions (see log-lik boxplot),
+respectively.
+
+```{r, fig.height = 7}
+plot_bp_by_par(summary_var, vars[[1]])
+```
+
+
+```{r, fig.height = 7}
+plot_bp_by_par(summary_var, vars[[2]])
+```
+
+```{r, fig.height = 7}
+plot_bp_by_par(summary_var, vars[[3]])
+```
+
+```{r, fig.height = 7}
+plot_bp_by_par(summary_var, vars[[4]])
+```
+
+```{r, fig.height = 7}
+plot_bp_by_par(summary_var, vars[[5]])
+```
+
+```{r, fig.height = 7}
+plot_bp_by_par(summary_var, vars[[6]])
+```
+
+### Exploratory estimates
+
+With the purpose of exploring the information provided by high-density
+regions, we calculate, from the chains that fit the incidence data, 
+summary statistics for the unknown parameters. The table below presents
+mean values and standard deviations (in parenthesis). When compared to the 
+values calculated from the Poisson distribution (see Section 2.4), we notice
+similar insights. For instance, both distributions yield notably _thin_ 
+estimates for $\nu$ & $\upsilon$, which determine the dynamics of the relative
+effective contact rate. Similarly, $\zeta$, whose uncertainty contributes to
+the uncertainty in the effective contact rate, is also narrow, albeit there is 
+a slight bias in estimates from the Poisson distribution, which tend to 
+overestimate $\Re_0$. 
+
+It should be remarked that ignoring pathological chains is not a sound approach.
+Namely, we cannot assume that the parameter space is well-behaved when the 
+evidence tells otherwise. Thus, we employ such estimated values for comparison 
+and exploration purposes rather than for a inference one.
+
+\hfill
+
+```{r}
+summary_var |> filter(var == "zeta") |> 
+  mutate(value = estimate_r(value),
+         var   = "R_0") -> R0_df
+
+summary_var2 <- bind_rows(summary_var, R0_df)
+
+summary_var2 |> 
+  filter(converges == "yes", var %in% c("R_0", "zeta", "nu", "upsilon","P_0", "phi")) |> 
+  group_by(order, var) |> 
+  summarise(mean = round(mean(value), 2),
+            sd   = round(sd(value), 3)) |> 
+  ungroup() -> par_stats
+
+fixed_vals <- par_stats |> select(order, var, mean) |> 
+  pivot_wider(names_from = var, values_from = mean) |> 
+  transpose()
+
+kable_df <- par_stats |> 
+  mutate(mean  = sprintf("%04.2f", mean),
+         sd    = sprintf("%05.3f", sd),
+         value = str_glue("{mean} ({sd})")) |> 
+  select(-mean, -sd) |> 
+  pivot_wider(names_from = var, values_from = value)
+
+kable_df <- kable_df[, c("order", "R_0", "zeta", "nu", "upsilon", "P_0", "phi")]
+
+colnames(kable_df) <- c("order", "R(0)", "$\\zeta$", "$\\nu$", "$\\upsilon$", "P(0)", "$\\phi$")
+
+knitr::kable(kable_df, "latex", booktabs = TRUE, escape = FALSE)
+```
+
+\hfill
+
+### Exploratory predicted relative contact rate
+
+From the well-behaved chains, we also estimate the predicted relative effective
+contact rate. 
+
+\hfill
+
+```{r}
+map(map_list, function(sf) {
+  posterior_df <- as.data.frame(sf) |> 
+    mutate(converges = ifelse(log_lik < -480, "no", "yes")) |> 
+    filter(converges == "yes")
+}) -> partial_posteriors
+
+partial_Z_list <- imap(partial_posteriors, function(posterior_df, dly_o) {
+  
+  mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+  mdl       <- read_xmile(mdl_path)
+  stocks    <- sd_stocks(mdl)
+  extract_timeseries_stock("Z", posterior_df, stocks, "o")
+})
+```
+
+```{r, fig.height = 6}
+data_df    <- rename(obs_df, y = y2)
+plot_daily_fit_by_order(partial_Z_list, data_df, 16, "Z[t]")
+```
+
+We see that the negative binomial (in this particular region of the parameter
+space) yields slightly thicker uncertainty intervals in the 4th-order
+model in comparison to those generated by the Poisson distribution. 
+
+```{r, fig.height = 3.5}
+set.seed(109418)
+plot_daily_fit_comparison(Z_list[[4]], 
+                          partial_Z_list[[4]], data_df, 4, 16, "Z[t]")
+```
+
+
+### Exploratory predicted effective contact rate
+
+Here, we compare the predicted $\Re_t$ from Section 1 (Poisson), and that from
+the well-behaved chains in the Nbin distribution. As expected, the Nbin offers
+more flexibility than the Poisson distribution, mainly for the two first weeks, 
+but overall both predictions convey similar information. In other words, the use
+of the Poisson distribution do not significantly compromise the results. Based 
+on these results, we conjecture that the constraint on narrow uncertainty
+intervals stems from the effective contact rate's particular deterministic 
+formulation rather than the choice of the measurement model.
+
+\hfill
+
+```{r, dev = 'cairo_pdf', fig.height = 3.5}
+df1 <- summarise_predicted_Re(posterior_list[[4]], 
+                                     Z_list[[4]], 4) |>
+  mutate(dist = "Pois")
+
+
+df2 <- summarise_predicted_Re(partial_posteriors[[4]], 
+                                     partial_Z_list[[4]], 4) |> 
+  mutate(dist = "Nbin")
+
+df <- bind_rows(df1, df2)
+
+plot_re_comparison(df)
+```
+
+
+## Only one unknown
+
+To provide further evidence of the complexity generated by the Nbin 
+distribution, we identify that even a single parameter can create bimodality in
+the 1st-order delay model. To illustrate this finding, we assume as unmodelled 
+predictors or known values, the mean values of the well-behaved chains 
+(Section 4.1.3). We do so for the parameters $P(0)$, $\upsilon$, $\nu$, and 
+$\phi$ (see table below), leaving $\zeta$ as the only unknown. We also show
+$\zeta$ estimates from the well-behaved chains.
+
+```{r}
+pars_subset <- c("nu", "phi", "upsilon", "zeta", "P_0")
+
+subset_df   <- map_df(pars_subset, function(par){
+  var_posterior <- extract_variable_matrix(map_list[[1]], par)
+  vals          <- var_posterior[, c(1:3, 5:8)] |> as.vector()
+  data.frame(par = par, val = vals)
+})
+
+subset_df |> 
+  group_by(par) |> 
+  summarise(mean = mean(val),
+            sd   = sd(val)) -> summary_subset
+
+kable_df     <- summary_subset
+kable_df$par <- str_glue("$\\nu$", "$\\phi$", "$\\upsilon$", "$\\zeta$", 
+                         "$\\P(0)$")
 ```
 
 ```{r}
-data_df <- rename(daily_df, y = y1)
-g1 <- plot_daily_fit(pred_C, data_df, "C[t]^d", 18)
+phi_val <- summary_subset |> filter(par == "phi") |> pull(mean) |> 
+  round(2)
 
-data_df <- rename(daily_df, y = y2)
-g2 <- plot_daily_fit(pred_Z, data_df, "Z[t]", 16)
+upsilon_val <- summary_subset |> filter(par == "upsilon") |> 
+  pull(mean) |> round(2)
 
-g1/g2
+nu_val <- summary_subset |> filter(par == "nu") |> 
+  pull(mean) |> round(2)
+
+zeta_val <- summary_subset |> filter(par == "zeta") |> pull(mean) |> round(2)
 ```
 
-## Convergence test
+```{r}
+dly_o     <- 1 # delay order
+mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+mdl       <- read_xmile(mdl_path)
+stocks    <- sd_stocks(mdl)
 
-However, it is not sufficient to obtain accurate fits to the data. In addition
-to this, each run must be accompanied by reliable likelihood estimates. 
-Accordingly, we run fourteen times the particle filter with the ten parameter
-sets shown above for various number of particles. It is expected that the
-likelihood value converges asymptotically to the _real_ value and the 
-log-likelihood error approximates zero as the number of particle increases. In
-stark contrast, the results show that the likelihood grows as the number of
-particles increases, and the log-likelihood error exhibit erratic trends. in
-a nutshell, we cannot use this alternative formulation for parameter inference.
+folder      <- "./Saved_objects/SEI3R_SMTH/neg_binom/zeta"
+stan_folder <- "./Stan_files/neg_binom/zeta"
+
+stan_path   <- str_glue("{stan_folder}/SEI3R_{dly_o}_smth.stan")
+write_SEI3R_model3(mdl_path, stan_path, 
+                   phi_val     = phi_val,
+                   upsilon_val = upsilon_val, 
+                   nu_val      = nu_val)
+```
+
+```{r fit_SMTH_1_neg_binom_zeta}
+
+stan_d <- list(n_obs  = nrow(obs_df),
+               y1       = obs_df$y1,
+               n_params = 3,
+               n_difeq  = nrow(stocks),
+               t0       = 0,
+               ts       = 1:nrow(obs_df))
+
+fit_options <- list(stan_d      = stan_d,
+                    seed        = 270343005,
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    chains      = 4)
+
+results   <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+zeta_sf   <- results$sf
+```
+
+### Trace plots 
+
+\hfill
+
+This experiment shows that even leaving $zeta$ as the only unknown, the
+bimodality persists.
 
 \hfill
 
 ```{r, fig.height = 3.5}
-ant_df <- data.frame(set_id = 1:10, lbl = str_glue("id: {1:10}"))
+color_scheme_set("teal")
 
-plot_loglik_sens(sens_df, ant_df)
+mcmc_trace(zeta_sf , pars = c("zeta", "log_lik"), 
+           facet_args = list(labeller = label_parsed))
+```
+
+\newpage
+
+## Two specific unknowns
+
+After several attempts and strategies to find a robust model parameterisation 
+that achieves convergence, we identify that leaving $P_0$ and $\phi$ as 
+unknowns yield well-behaved chains, irrespectively of particular starting points
+and algorithm tuning. Nevertheless, this strategy assumes that $\zeta$, $\nu$ 
+and $\upsilon$ are known quantities, which we fix at the values found above
+(Section 4.1.3). In consequence, this can be seen as another exploratory 
+exercise (instead of inference), considering that we employ the data twice.
+
+```{r}
+folder          <- "./Saved_objects/SEI3R_SMTH/neg_binom"
+stan_folder     <- "./Stan_files/neg_binom"
+
+walk(fixed_vals, function(par_list) {
+  
+  dly_o       <- par_list$order
+  zeta_val    <- par_list$zeta
+  nu_val      <- par_list$nu
+  upsilon_val <- par_list$upsilon
+  
+  mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+  stan_path <- str_glue("{stan_folder}/SEI3R_{dly_o}_smth.stan")
+  write_SEI3R_model4(mdl_path, stan_path, zeta_val, nu_val, upsilon_val)
+})
+```
+
+```{r}
+seeds <- c(632420346,961676923, 988947959, 700718915, 839142763, 612917753,
+           322022671, 787808285, 31965902)
+
+nb_fits <- lapply(1:9, function(dly_o) {
+  
+  mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+  mdl       <- read_xmile(mdl_path)
+  stocks    <- sd_stocks(mdl)
+  
+  stan_d <- list(n_obs  = nrow(obs_df),
+                 y1       = obs_df$y1,
+                 n_params = 3,
+                 n_difeq  = nrow(stocks),
+                 t0       = 0,
+                 ts       = 1:nrow(obs_df))
+  
+  set.seed(seeds[[dly_o]])
+  
+  fit_options <- list(stan_d    = stan_d,
+                    seed        = seeds[[dly_o]],
+                    warmup      = 2000,
+                    sampling    = 2000,
+                    chains      = 8)
+  
+  results               <- run_stan_file(dly_o, fit_options, folder, stan_folder)
+  sf                    <- results$sf
+})
+```
+
+
+
+```{r}
+posterior_list_nb      <- lapply(nb_fits, function(fit) as.data.frame(fit))
+
+sim_incidences_list_nb <- imap(posterior_list_nb, 
+                               function(posterior_df, dly_o) {
+                                   construct_incidence_df(posterior_df, dly_o)
+                               })
+  
+Z_list_nb            <- imap(posterior_list_nb , function(posterior_df, dly_o) {
+  
+  mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+  mdl       <- read_xmile(mdl_path)
+  stocks    <- sd_stocks(mdl)
+  extract_timeseries_stock("Z", posterior_df, stocks, "o")
+})
+```
+
+
+### Expected values
+
+####  Predicted incidence compared to daily case counts
+
+\hfill
+
+\hfill
+
+```{r, fig.height = 6}
+set.seed(452032702)
+data_df    <- rename(obs_df, y = y1)
+plot_daily_fit_by_order(sim_incidences_list_nb, data_df, 
+                        data_shape = 18, "C[t]")
+```
+
+\newpage
+
+#### Predicted relative contact rate compared to mobility indexes
+
+\hfill
+
+\hfill
+
+```{r mob_fits_g_nb, fig.height = 7}
+set.seed(7262)
+data_df <- rename(obs_df, y = y2)
+plot_daily_fit_by_order(Z_list_nb, data_df, 16, "Z[t]")
+```
+
+\newpage
+
+### Likelihood
+
+Likelihood values suggest preference for 2nd, 3rd and **4th** (highest) order
+delay models.
+
+```{r}
+imap_dfr(posterior_list_nb, function(df, dly_o) {
+   select(df, log_lik) |> mutate(order = dly_o)
+}) -> ll_df
+```
+
+```{r}
+plot_ll_by_order(ll_df)
 ```
 
 \hfill
 
-```{r, fig.height = 3.5}
-ant_df <- data.frame(set_id = 1:10, lbl = str_glue("id: {1:10}"))
+```{r}
+ ll_df |> rename(value = log_lik) |> 
+  var_quantiles_by_order(rnd = 1) -> kable_df
 
-plot_SE_sens_by_set(sens_df, ant_df)
+knitr::kable(kable_df, "latex", booktabs = TRUE)
+```
+
+### Accuracy
+
+#### Incidence
+
+\hfill
+
+The incidence MASE suggests that the 1st, 8th and 9th order delay structures do 
+not yield accurate incidence predictions.
+
+```{r}
+mase_inc_nb <- imap_dfr(sim_incidences_list_nb, mase_per_iter, 
+                     data_vector = obs_df$y1)
+
+summary_mase_nb <- mase_inc_nb |>  group_by(order) |> 
+  summarise(mean   = mean(mase),
+            q_val  = quantile(mase, c(0.025, 0.25, 0.5, 0.75, 0.975)),
+            q_type = c("q2.5", "q25", "q50", "q75", "q97.5")) |> 
+  ungroup()
+
+ggplot(mase_inc_nb, aes(x = order, y = mase)) +
+  geom_violin(aes(group = order), colour = STH_colour) +
+  scale_x_continuous(breaks = 1:9) +
+#  scale_y_continuous(limits = c(0.95, 1.01)) +
+  stat_smooth(data = summary_mase_nb, aes(x = order, y = mean),
+              geom = 'line', alpha = 0.25, se = FALSE, 
+              colour = STH_colour, size = 0.5, linetype = "dashed") +
+  geom_hline(yintercept = 1, linetype = "dotted", colour = "grey50") +
+  theme_pubr() +
+  labs(subtitle = "Incidence prediction accuracy",
+       y = "MASE [Unitless]",
+       x = "Delay order")
+```
+
+\hfill
+
+```{r}
+ mase_inc_nb |> rename(value = mase) |> 
+  var_quantiles_by_order(rnd = 1) -> kable_df
+
+knitr::kable(kable_df, "latex", booktabs = TRUE)
+```
+
+
+#### Mobility
+
+\hfill
+
+We reach convergence at the expense of fixing some parameters. In particular,
+by letting $\upsilon$ and $\nu$ fixed to a point estimate, the predicted 
+relative contact rate ($Z_t$) is also a point estimate at each time $t$. Based
+on these point estimates, the 3rd, **4th**, 5th, 6th, and 7th order delays yield 
+the most accurate trajectories (compared to mobility data).
+
+\hfill
+
+```{r, fig.height = 3.5}
+mase_mob_nb <- imap_dfr(Z_list_nb, mase_per_iter, 
+                     data_vector = obs_df$y2)
+
+summary_mase_mob_nb <- mase_mob_nb |> group_by(order) |> 
+  summarise(mean   = mean(mase))
+
+ggplot(summary_mase_mob_nb, aes(x = as.factor(order), y = mean)) +
+  geom_point(aes(group = order), colour = STH_colour) +
+  stat_smooth(aes(x = order, y = mean),
+              geom = 'line', alpha = 0.5, se = FALSE, 
+              colour = STH_colour, size = 0.5, linetype = "dashed") +
+  geom_hline(yintercept = 1, linetype = "dotted", colour = "grey50") +
+  theme_pubr() +
+  labs(subtitle = "Accuracy of the predicted transmission rate",
+       x        = "Delay order",
+       y        = "MASE [Unitless]")
+```
+
+\hfill
+
+```{r}
+mase_mob_nb |> group_by(order) |> 
+  summarise(mean = sprintf("%03.1f", mean(mase))) -> kable_df
+
+colnames(kable_df) <- c("Order", "MASE")
+
+knitr::kable(kable_df, "latex", booktabs = TRUE)
+```
+
+### Posterior distribution
+
+The following table summarises parameter estimates from the samples obtained 
+through the HMC algorithm. Specifically, we show mean values and standard
+deviations (in parenthesis).
+
+\hfill
+
+```{r, fig.height = 5}
+imap_dfr(posterior_list_nb, function(df, i) {
+  
+  df |> select(P_0, phi) |> 
+    mutate(iter = row_number(), order = i) |> 
+    pivot_longer(c(-iter, -order))
+}) -> tidy_pars_df
+```
+
+```{r pars_nb}
+pars_summary <- tidy_pars_df |>  group_by(order, name) |> 
+  summarise(mean = round(mean(value), 2),
+            sd   = round(sd(value), 2)) |> ungroup()
+
+var_df <- pars_summary |> 
+  mutate(value = str_glue("{mean} ({sd})")) |> 
+  select(-mean, -sd) |> 
+  pivot_wider(names_from = name, values_from = value) |> 
+  select(-order)
+
+fixed_df <- imap_dfr(fixed_vals, function(row_list,i) {
+  
+  R0 <- round(estimate_r(row_list$zeta), 2)
+  
+  data.frame(order   = i, 
+             R0      = str_glue("{R0} (0)"),
+             zeta    = str_glue("{row_list$zeta} (0)"),
+             nu      = str_glue("{row_list$nu} (0)"),
+             upsilon = str_glue("{row_list$upsilon} (0)"))
+})
+
+summary_df <- bind_cols(fixed_df, var_df)
+
+colnames(summary_df) <- c("Order", "R(0)", "$\\zeta$","$\\nu$", "$\\upsilon$", "P(0)", "$\\phi$")
+
+knitr::kable(summary_df, "latex", booktabs = TRUE, escape = FALSE)
+
+```
+
+\hfill
+
+Further, the table below demonstrates that the estimated means (from this 
+exploratory exercise) are similar to those obtained from the inference process
+carried out through the Poisson distribution (in parenthesis).
+
+```{r}
+var_df <- pars_summary |> select(-sd) |> 
+  pivot_wider(names_from = name, values_from = mean) |> 
+  select(-order)
+
+fixed_df <- imap_dfr(fixed_vals, function(row_list,i) {
+  
+  R0 <- round(estimate_r(row_list$zeta), 2)
+  
+  data.frame(order   = i, 
+             R_0      = R0 ,
+             zeta    = row_list$zeta,
+             nu      = row_list$nu,
+             upsilon = row_list$upsilon)
+})
+
+pars_nb <- bind_cols(fixed_df, var_df) |> transpose()
+
+pars_pois <- pars_summary_pois |> 
+  select(-sd) |> pivot_wider(names_from = name, values_from = mean) |> 
+  transpose()
+
+map2_dfr(pars_nb, pars_pois, function(nb, pois) {
+  data.frame(order   = nb$order, 
+             R0      = str_glue("{nb$R_0} ({pois$R_0})"),
+             zeta    = str_glue("{nb$zeta} ({pois$zeta})"),
+             nu      = str_glue("{nb$nu} ({pois$nu})"),
+             upsilon = str_glue("{nb$upsilon} ({pois$upsilon})"),
+             P_0     = str_glue("{nb$P_0} ({pois$P_0})"),
+             phi     = str_glue("{nb$phi} (0)"))
+}) -> mean_contrast
+
+
+colnames(mean_contrast) <- c("Order", "R(0)", "$\\zeta$","$\\nu$", "$\\upsilon$", "P(0)", "$\\phi$")
+
+knitr::kable(mean_contrast, "latex", booktabs = TRUE, escape = FALSE)
 ```
 
 
 
+\newpage
 
+# Prediction of hidden states
+
+Based on the results above, we select the 4th-order information delay structure
+with a Poisson measurement model as DGP3.
+
+\hfill
+
+```{r}
+s_dly_o <- 4 # Delay order selected 
+
+pois_inc     <- sim_incidences_list[[s_dly_o]]
+summary_inc  <- summarise_predicted_incidence(pois_inc)
+data_df      <- data_list$Weekly |> rename(y = y1)
+
+g1 <- plot_wkl_fit(summary_inc, data_df, "C[t]", "Incidence fit", 
+                   shape = 16, STH_colour)
+```
+
+```{r}
+pois_Z      <- Z_list[[s_dly_o]]
+summary_Z   <- summarise_predicted_Z(pois_Z)
+data_df     <- data_list$Weekly |> rename(y = y2)
+
+
+g2 <-  plot_wkl_fit(summary_Z, data_df, "Z[t]", "Mobility fit", shape = 16, 
+                    STH_colour)
+```
+
+```{r}
+pois_pst   <- posterior_list[[s_dly_o]]
+summary_Re <- summarise_predicted_Re(pois_pst, pois_Z, s_dly_o)
+
+g3 <- plot_sth_wkl_rt(summary_Re)
+```
+
+```{r, fig.height = 8, dev = 'cairo_pdf'}
+g1 / g2 / g3
+```
+
+```{r}
+folder      <- "./Saved_objects/SEI3R_SMTH"
+
+tidy_pars |>  filter(order == s_dly_o) |> select(-order) |> 
+  group_by(name) |> summarise(mean   = mean(value), 
+                              vals   = quantile(value, c(0.025, 0.975)),
+                              lims   = c("lower_limit", "upper_limit")) |> 
+  pivot_wider(names_from = lims, values_from = vals) -> est_df
+
+results_list <- list(label         = "3 (SM4)",
+                     sim_inc       = summary_inc,
+                     sim_mob       = summary_Z,
+                     Re_t          = summary_Re,
+                     estimates_df  = est_df)
+
+fn <- file.path(folder, "predictions.rds")
+
+if(!file.exists(fn)) saveRDS(results_list, fn)
+```
+
+\newpage
+
+# Original Computing Environment
+
+```{r}
+sessionInfo()
+```
+
+# References {#references .unnumbered}

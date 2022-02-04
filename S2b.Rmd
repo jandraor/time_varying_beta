@@ -12,12 +12,13 @@ This appendix illustrates the inference process carried out on one of DGP1's
 structure candidates. This candidate's process model consists of an SEIR-type 
 formulation whose relative effective contact rate is described by Geometric
 Brownian Motion. Moreover, this candidate's measurement model assumes that daily
-incidence counts are distributed according to the Negative binomial 
-distribution, and that mobility data is a proxy measurement for the relative 
-effective contact rate. We refer to this model in S1 as **Candidate 4**. In 
-particular, we apply _Iterated Filtering_ and the _Particle Filter_ to obtain 
-from Candidate 4 estimates (via samples) for the effective reproductive number 
-and other parameters that explain Ireland's first wave of COVID-19 in 2020.
+incidence counts are distributed according to the 
+**Negative binomial distribution**, and that **mobility data is a proxy** 
+measurement for the relative effective contact rate. We refer to this model in
+S1 as **Candidate 4**. In particular, we apply _Iterated Filtering_ and the 
+_Particle Filter_ to obtain, from Candidate 4, estimates (via samples) for the
+effective reproductive number and other parameters that explain Ireland's first
+wave of COVID-19 in 2020.
 
 
 \tableofcontents 
@@ -219,8 +220,8 @@ merely an approximation to the actual values at those points. This difference
 occurs for [two reasons](https://kingaa.github.io/sbied/mif/slides.pdf): the 
 Iterated Filtering algorithm is run with fewer particles than are needed for a 
 good likelihood evaluation; 2) the stochastic perturbations applied to the 
-inferred parameters at each iteration. In consequence, it is necessary to run 
-the Particle Filter for obtaining reliable likelihood estimates. Specifically,
+inferred parameters at each iteration. Consequently, it is necessary to run 
+the Particle Filter to obtain reliable likelihood estimates. Specifically,
 we use the values from each run's final filtering iteration as inputs to the 
 Particle Filter.
 
@@ -256,10 +257,10 @@ pairs(~loglik + zeta + P_0 + tau + alpha + phi,
 
 In this step, we follow a similar process described in Section 2.1, but this
 time increasing the number of starting points (300) and filtering iterations.
-Also, for each single set of parameters (starting point), there is only one run
-(in contrast with the 20 runs in Section 2.1). We refer to this step as
-*global search*, and whose purpose is the construction of a likelihood surface
-to identify regions of high plausibility.
+Also, there is only one run for each starting point (in contrast with the 20 
+runs in Section 2.1). We refer to this step as *global search*, whose purpose is
+to construct a likelihood surface that allows us to identify regions of high 
+plausibility.
 
 
 ### Likelihood maximisation
@@ -309,8 +310,8 @@ mif_traces(traces_df, names(par_obj$unknown), GBM_colour)
 \hfill
 
 In the graph below, grey dots denote starting points, whereas the other dots are
-the point estimates obtained from the Iterated Filtering algorithm. We can 
-notice that the estimates tend to converge to certain regions of the parameter
+the point estimates obtained from the Iterated Filtering algorithm. We notice 
+that the estimates tend to converge to certain regions of the parameter
 space.
 
 \hfill
@@ -489,9 +490,8 @@ profile_list_GBM[[var_name]] -> all
 As with the local and global searches, we estimate via the Particle Filter the
 likelihood for each of the point estimates obtained from the Iterated Filtering
 algorithm. From this calculation, we construct the confidence intervals using 
-the Profile Likelihood method, and its refined version, the Monte 
-Carlo-adjusted profile. The red dashed line indicates the cut-off at the 95% 
-confidence level.
+the Profile Likelihood method and its refined version, the Monte Carlo-adjusted 
+profile. The red dashed line indicates the cut-off at the 95% confidence level.
 
 \hfill
 
@@ -1156,9 +1156,9 @@ profile likelihood.
 
 We collate all the likelihood estimates from the previous steps into a single
 database. The resulting likelihood surfaces exhibit quadratic shapes 
-(shown below). We therefore assume that these surfaces are approximations of the
-likelihood profiles. Following these assumption, we estimate the 95% confidence 
-intervals for each parameters.
+(shown below). We, therefore, assume that these surfaces are approximations of
+the likelihood profiles. Following this assumption, we estimate each parameter's
+95% confidence intervals.
 
 \hfill
 
@@ -1263,13 +1263,15 @@ all_est <- rbind(surf_est, mcap_est, prof_est)
 par_comparison_stochastic(all_est)
 ```
 
-## Prediction
+\newpage
+
+# Prediction
 
 The reader should recall that we obtain predictions for the latent states from
 the filtering distribution, which is intractable. To circumvent this difficulty,
-we use samples to approximate it. We briefly describe such process.
+we use samples to approximate it. We briefly describe such a process.
 
-### Sampling space
+## Sampling space
 
 First, we define a hypercube near the MLE (neighbourhood). 
 
@@ -1286,7 +1288,7 @@ plot_MLE_neighbourhood(unk_par_MLE, GBM_colour)
 
 \newpage
 
-### Draws
+## Draws
 
 Then, we draw 200 samples from such hypercube.
 
@@ -1311,12 +1313,11 @@ plot(params, pch = 16, col = GBM_colour,
 
 \newpage
 
-### Hidden states
+## Hidden states
 
 Finally, we feed the Particle Filter with the samples from the previous step.
-This method returns a set of draws, which are weighted by its corresponding
-likelihood to produce an approximation of the filtering distribution at
-each time step.
+This method returns a set of draws weighted by its corresponding likelihood to
+approximate the filtering distribution at each time step.
 
 \hfill
 
@@ -1348,7 +1349,7 @@ plot_daily_re(summary_list[[3]], GBM_colour,
               "Effective reproduction number") -> g3
 ```
 
-```{r, fig.height = 7}
+```{r, fig.height = 7, dev = 'cairo_pdf'}
 g1 / g2 / g3
 ```
 

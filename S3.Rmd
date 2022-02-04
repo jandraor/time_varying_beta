@@ -1,138 +1,1714 @@
 ---
 title: "S3 Appendix"
-output: pdf_document
+output: 
+  pdf_document:
+    number_sections: true
+header-includes:
+  - \usepackage{booktabs}
+urlcolor: blue
 ---
 
-The purpose of this short appendix is to facilitate reproducibility. Throughout
-this research, all results stem from R Markdown documents so that users 
-(including us) can identify the source code that produces any specific outcome. 
-Here, we compare the predicted latent states by each of the
-three Data Generating Processes.
+This appendix illustrates the inference process carried out on DGP2. Its
+process model consists of an SEIR-type formulation whose relative effective 
+contact rate is described by a Cox-Ingersoll-Ross structure. Moreover, DGP2's 
+measurement model assumes that weekly incidence counts are distributed according
+to the **Poisson distribution**, and that **mobility data is a proxy** 
+measurement for the relative effective contact rate. In particular, we apply 
+_Iterated Filtering_ and the _Particle Filter_ to obtain estimates (via samples)
+for the effective reproductive number and other parameters that explain 
+Ireland's first wave of COVID-19 in 2020.
 
-\hfill
+\tableofcontents 
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, message = FALSE,
-                      warning = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 
+library(copula)
+library(doParallel)
+library(doRNG)
 library(dplyr)
 library(imputeTS)
 library(lubridate)
+library(parallel)
+library(pomp)
 library(purrr)
 library(readr)
 library(readxl)
 library(stringr)
+library(tibble)
+library(tictoc)
 library(tidyr)
 
+source("./R_scripts/data.R")
+source("./R_scripts/R_estimates.R")
+source("./R_scripts/helpers.R")
+source("./R_scripts/likelihood_funs.R")
+source("./R_scripts/par_summary.R")
 source("./R_scripts/plots.R")
+source("./R_scripts/POMP_models.R")
+
+data_list      <- get_data()
+time_record_df <- data.frame()
+
+labels_CIR     <- c("Log lik", expression(zeta), expression("P"[0]),
+                 expression(tau), expression(alpha), expression(nu),
+                 expression(upsilon))  
+```
+
+
+\newpage
+
+
+# Structure
+
+## Process model
+
+\hfill
+
+\begin{equation}
+    \frac{dS}{dt} = - S_t \lambda_t
+\end{equation}
+
+\begin{equation}
+   \frac{dE}{dt} = S_t \lambda_t - \sigma E_t
+\end{equation}
+
+\begin{equation}
+   \frac{dP}{dt} = \omega \sigma E_t - \eta P_t
+\end{equation}
+
+\begin{equation}
+   \frac{dI}{dt} =  \eta P_t - \gamma I_t
+\end{equation}
+
+\begin{equation}
+   \frac{dA}{dt} =  (1-\omega) \sigma E_t - \kappa A_t
+\end{equation}
+
+\begin{equation}
+   \frac{dR}{dt} =  \kappa A_t + \gamma I_t
+\end{equation}
+
+\begin{equation}
+   \lambda_t =  \frac{ \beta_t(I_t + P_t + \mu A_t)}{N_t} 
+\end{equation}
+
+\begin{equation}
+   \beta_t = \zeta Z_t
+\end{equation}
+
+\begin{equation}
+   \color{red}
+   \frac{dZ}{dt} =  \nu(\upsilon - Z_t)  + \sqrt{\alpha}Z_tdW
+\end{equation}
+
+\begin{equation}
+   dW \sim Normal(0, \sqrt{dt})
+\end{equation}
+
+## Measurement model
+
+\hfill
+
+\begin{equation}
+   \frac{dC}{dt} =  \eta P_t - C_t \delta(t \, mod \, 7)
+\end{equation}
+
+\begin{equation}
+  y^1_w \sim Pois(C_t) 
+\end{equation}
+
+\begin{equation}
+  y^2_w \sim Normal(Z_t, \tau) 
+\end{equation}
+
+## Unmodelled predictors
+
+\hfill
+
+```{r}
+um <- read_csv("./Data/Unmodelled_predictors.csv") |> 
+  mutate(Symbol = paste0("$", Symbol, "$")) 
+
+knitr::kable(um, "latex", booktabs = TRUE, escape = FALSE)
+```
+
+## Unknown parameters
+
+\hfill
+
+```{r}
+um <- read_csv("./Data/Unknown_predictors.csv") |>  
+  mutate(Symbol = paste0("$", Symbol, "$")) |> 
+  slice(c(1:3, 5:7))
+
+knitr::kable(um, "latex", booktabs = TRUE, escape = FALSE)
+```
+
+\newpage
+
+# Parameter inference
+
+```{r}
+obs_df  <- data_list[["Weekly"]]
+inc_mdl <- "Pois"
+mob_mdl <- TRUE
+
+model_id     <- 12
+folder       <- str_glue("./Saved_objects/SEI3R_CIR/mdl_{model_id}")
+mdl_filename <- str_glue("CIR_{model_id}")
+pomp_obj     <- pomp_CIR(inc_mdl, mob_mdl, obs_df, mdl_filename, 1 / 32)
+pomp_mdl     <- pomp_obj$mdl
+par_obj      <- pomp_obj$pars
+fixed_params <- par_obj$fixed
+params       <- par_obj$all
+```
+
+## Local search
+
+We start the inference process with a preliminary test. Specifically, we verify 
+that Iterated Filtering algorithm, applied to this DGP (DGP2) and data, 
+converges to regions of high likelihood.
+
+### Likelihood maximisation
+
+Accordingly, from a single point in the parameter space, we search for the
+Maximum Likelihood Estimate (MLE) via Iterated Filtering. We repeat this process
+**twenty** times.
+
+\hfill
+
+```{r}
+source("./R_scripts/local_search.R")
+ptb    <- rw.sd(P_0 = ivp(0.02), tau = 0.02, nu = 0.02, upsilon = 0.02, 
+                zeta = 0.02, alpha = 0.02)
+
+fn     <- file.path(folder, "local_search.rds")
+
+ls_obj <- local_search(pomp_mdl, params, ptb, fn, 292718669, detectCores())
 ```
 
 ```{r}
-mdls <- c("GBM", "SMTH", "CIR")
+time_row <- data.frame(par = "all", 
+                       step = "LS_ml",
+                       time = calculate_time(ls_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row) 
+```
+
+```{r}
+mifs_local <- ls_obj$result
+
+mifs_local |> 
+  traces() |> 
+  melt() -> traces_df 
+
+mif_traces(traces_df, names(par_obj$unknown), CIR_colour)
+```
+
+\newpage
+
+### Likelihood estimates
+
+\hfill
+
+The likelihood estimates obtained from the Iterated Filtering algorithm are 
+merely an approximation to the actual values at those points. This difference
+occurs for [two reasons](https://kingaa.github.io/sbied/mif/slides.pdf): the 
+Iterated Filtering algorithm is run with fewer particles than are needed for a 
+good likelihood evaluation; 2) the stochastic perturbations applied to the 
+inferred parameters at each iteration. Consequently, it is necessary to run 
+the Particle Filter to obtain reliable likelihood estimates. Specifically,
+we use the values from each run's final filtering iteration as inputs to the 
+Particle Filter.
+
+\hfill
+
+```{r}
+fn <- file.path(folder, "local_search_ll.rds")
+
+ll_local_search_obj <- mif_ll(mifs_local, seed = 359084918, 
+                              n_cores = detectCores(),
+                              filename = fn, Np = 5e4)
+```
+
+```{r}
+time_row <- data.frame(par = "all", 
+                       step = "LS_ll",
+                       time = calculate_time(ll_local_search_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row) 
+```
+
+```{r, fig.height = 7, fig.width = 7}
+ls_loglik_df <- extract_ll_df(ll_local_search_obj)
+
+pairs(~loglik + zeta + P_0 + tau + alpha + nu + upsilon,
+      data = ls_loglik_df, pch = 16, col = CIR_colour,
+      labels = labels_CIR )
+```
+
+\newpage
+
+## Global search
+
+In this step, we follow a similar process described in Section 2.1, but this
+time increasing the number of starting points (300) and filtering iterations.
+Also, there is only one run for each starting point (in contrast with the 20 
+runs in Section 2.1). We refer to this step as *global search*, whose purpose is
+to construct a likelihood surface that allows us to identify regions of high 
+plausibility.
+
+
+### Likelihood maximisation
+
+\hfill
+
+```{r}
+mf1          <- ls_obj$result[[1]] 
+fixed_params <- par_obj$fixed      
+
+set.seed(76393492)
+
+runif_design(
+  lower = c(zeta = 0.1, P_0 = 1,  tau = 0.05, alpha = 0.05, nu = 0.005, 
+            upsilon = 0.01),
+  upper = c(zeta = 3,   P_0 = 30, tau = 3, alpha = 0.3, nu = 0.5, 
+            upsilon = 0.5),
+  nseq  = 300
+) -> guesses
+
+fn     <- file.path(folder, "Global_search.rds")
+seed   <- 435367905
+source("./R_scripts/global_search.R")
+gs_obj <- global_search(guesses, fixed_params, mf1, fn, seed, detectCores())
+```
+
+```{r}
+time_row <- data.frame(par = "all", 
+                       step = "GS_ml",
+                       time = calculate_time(gs_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r, message = FALSE, fig.height = 3.5}
+mifs_global <- extract_mif_results(gs_obj)
+
+mifs_global |>  
+  traces() |> 
+  melt() -> traces_df 
+
+mif_traces(traces_df, names(par_obj$unknown), CIR_colour)
+```
+
+Given the random-walk behaviour embedded in the iterated filtering algorithm, 
+some iterations wildly diverge from regions of high likelihood, distorting the 
+log-lik trace plot (shown above). For this reason, we zoom in to the traces that
+reached convergence.
+
+\hfill
+
+```{r, fig.height = 2.5}
+loglik_traces(traces_df, c(-200, 0), CIR_colour)
+```
+
+\newpage
+
+### Likelihood estimates
+
+\hfill
+
+In the graph below, grey dots denote starting points, whereas the other dots are
+the point estimates obtained from the Iterated Filtering algorithm. We can 
+notice that the estimates tend to converge to certain regions of the parameter
+space.
+
+\hfill
+
+```{r}
+fn          <- file.path(folder, "Global_search_ll.rds" )
+ll_obj      <- mif_ll(mifs_global, Np = 5e4, 1270401374, 
+                      n_cores = detectCores(), fn)
+```
+
+```{r}
+time_row <- data.frame(par  = "all", 
+                       step = "GS_ll",
+                       time = calculate_time(ll_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r, fig.height = 7, fig.width = 7}
+loglik_df <- extract_ll_df(ll_obj)
+
+loglik_df |>  filter(loglik.se < 2) |> 
+  bind_rows(guesses) |> 
+  mutate(type=if_else(is.na(loglik),"guess","result")) |> 
+  arrange(type) -> gr_CIR_df
+
+pairs(~loglik + zeta + P_0 + tau + alpha + nu + upsilon, data = gr_CIR_df,
+      col=ifelse(gr_CIR_df$type == "guess",grey(0.8), CIR_colour), pch = 16,
+      labels = labels_CIR)
+```
+
+\newpage
+
+## Profile likelihood
+
+As with DGP1, we employ the profile likelihood method to estimate DGP2's
+confidence intervals. See Appendix 2d for the description of each step to obtain
+the uncertainty bounds. Here, we only present the results. Notice that we only
+show the likelihood maximisation (via iterated filtering) of the initial
+effective contact rate ($\zeta$). However, this process is applied to all the
+parameters (not shown).
+
+```{r CIR_profile_lists}
+profile_list_CIR        <- vector(mode = "list", 
+                                  length = length(par_obj$unknown))
+
+names(profile_list_CIR) <- names(par_obj$unknown)
+
+cutoff_list_CIR        <- profile_list_CIR
+
+unadjusted_profile_list <- profile_list_CIR
+mcap_list               <- profile_list_CIR
+```
+
+### $\zeta$ - Initial effective contact rate
+
+```{r CIR_zeta}
+#===============================================================================
+var_name <- "zeta"
+#===============================================================================
+```
+
+#### Initial likelihood surface
+
+\hfill
+
+\hfill
+
+```{r, fig.height = 3.5}
+raw_likelihood(gr_CIR_df, var_name, CIR_colour)
+```
+
+\newpage
+
+#### Exploration hypercube
+
+\hfill
+
+\hfill
+
+```{r}
+loglik_df |>  
+  filter(loglik > max(loglik)- 20, loglik.se < 2) |> 
+  sapply(range) -> box
+
+set.seed(917477792)
+
+profile_design(
+  zeta  = seq(0.5, 2,length = 50),
+  lower = box[1, c("P_0" , "tau", "alpha", "nu", "upsilon")],
+  upper = box[2, c("P_0", "tau", "alpha", "nu", "upsilon")],
+  nprof = 20, type = "sobol"
+) -> guesses
+```
+
+```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
+plot_guesses(guesses, 0.25, CIR_colour) +
+  theme(axis.text = element_text(size = 5))
+```
+
+#### Likelihood maximisation
+
+\hfill
+
+\hfill
+
+```{r}
+ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, alpha = 0.02, nu = 0.02,
+             upsilon = 0.02)
+
+fn      <- file.path(folder, "ifp_zeta.rds")
+
+ifp_obj <- iter_filt_profile(mf1 = mifs_local[[1]], 
+                         guesses = guesses,
+                         fixed_params = fixed_params,
+                         perturbations = ptb,
+                         filename = fn,
+                         seed = 553239040, n_cores = detectCores())
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r, fig.height = 3.5}
+profile_mif_results <- extract_mif_results(ifp_obj)
+
+profile_mif_results |>  
+  traces() |> 
+  melt() -> traces_df 
+
+mif_traces(traces_df, names(par_obj$unknown), CIR_colour)
+```
+
+```{r CIR_zeta_ll}
+fn              <- file.path(folder, "ifp_zeta_ll.rds")
+profile_results <- mif_ll(profile_mif_results, seed = 426820244,
+                          n_cores = detectCores(), filename = fn,
+                          Np = 5e4)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r CIR_zeta_ll_g, message=FALSE}
+prof_ll <- extract_ll_df(profile_results) |>  
+  filter(!is.na(loglik)) |> 
+  filter(loglik.se < 1)
+
+profile_list_CIR[[var_name]] <- prof_ll |>  
+  mutate(profile_over = var_name)
+
+profile_list_CIR[[var_name]] |>  
+  filter(loglik > max(loglik) - 20)-> all
+```
+
+\newpage
+
+#### Confidence intervals
+
+\hfill
+
+\hfill
+
+
+```{r}
+source("./R_scripts/profile_utils.R")
+
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
+
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff, CIR_colour) -> g1
+```
+
+```{r}
+source("./R_scripts/mcap.R")
+
+span <- 0.75
+
+mcap_obj <- mcap(prof_ll$loglik, prof_ll[[var_name]], lambda = span)
+
+max_smoothed_loglik <- mcap_obj$fit$smoothed |>  max()
+
+cut_off_smth <- max_smoothed_loglik - mcap_obj$delta
+
+mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
+                              ul  = mcap_obj$ci[[2]],
+                              mle = mcap_obj$mle)
+
+plot_MCAP(prof_ll, var_name, span, CIR_colour) -> g2
+```
+
+```{r profile_zeta_CIR_g, fig.height = 4}
+g1 / g2
+```
+
+\newpage
+
+### $P_0$ - Initial number of preclinical individuals
+
+```{r}
+#===============================================================================
+var_name <- "P_0"
+#===============================================================================
+```
+
+#### Initial likelihood surface
+
+\hfill
+
+\hfill
+
+```{r, fig.height = 3.5}
+raw_likelihood(gr_CIR_df, var_name, CIR_colour)
+```
+
+
+<!-- ##### Exploration hypercube -->
+
+<!-- \hfill -->
+
+<!-- \hfill -->
+
+
+```{r}
+loglik_df %>% 
+  filter(loglik > max(loglik)- 20, loglik.se < 2) %>%
+  sapply(range) -> box
+
+set.seed(516993613)
+
+profile_design(
+  P_0   = seq(0, 10,length = 50),
+  lower = box[1, c("zeta" , "tau", "alpha", "nu", "upsilon")],
+  upper = box[2, c("zeta", "tau", "alpha", "nu", "upsilon")],
+  nprof = 20, type = "sobol"
+) -> guesses_P_0
+```
+
+```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
+# plot_guesses(guesses_P_0, 0.25, CIR_colour) +
+#   theme(axis.text = element_text(size = 5))
+```
+
+
+<!-- ##### Likelihood maximisation -->
+
+<!-- \hfill -->
+
+<!-- \hfill -->
+
+```{r}
+source("./R_scripts/likelihood_funs.R")
+P_0_ptb <- rw.sd(zeta = 0.02, tau = 0.02, alpha = 0.02, nu = 0.02,
+                 upsilon = 0.02)
+
+var_name <- "P_0"
+fn_ifp   <- file.path(folder, str_glue("ifp_{var_name}.rds"))
+
+ifp_obj <- iter_filt_profile(mf1 = mf1, 
+                             guesses = guesses_P_0,
+                             fixed_params = fixed_params,
+                             perturbations = P_0_ptb,
+                             filename = fn_ifp,
+                             seed = 787856777, n_cores = detectCores())
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r, message = FALSE}
+profile_mif_results <- extract_mif_results(ifp_obj)
+
+profile_mif_results |>  
+  traces() |> 
+  melt() -> traces_df 
+```
+
+```{r, fig.height = 3.5}
+# mif_traces(traces_df, names(par_obj$unknown), CIR_colour)
 ```
 
 
 ```{r}
-source("./R_scripts/irish_data.R")
-irish_data   <- get_irish_data()
-
-wkl_inc <- irish_data %>% slice(1:77)%>%
-  mutate(week = ((time - 1) %/% 7) + 1) %>% 
-  group_by(week) %>% summarise(y = sum(y)) %>% 
-  mutate(time = week * 7)
-
-
-
-map_df(mdls, function(mdl) {
-  folder   <- str_glue("./Saved_objects/Irish_data/SEI3R_{mdl}")
-  if(mdl != "SMTH") {
-    folder <- paste0(folder, "/weekly/mdl_2")
-  }
-  
-  fn       <- file.path(folder, "predictions.rds") 
-  pred_obj <-readRDS(fn)
-  
-  pred_obj$sim_inc %>% mutate(DGP = pred_obj$label)
-}) -> sim_inc
-
-
-plot_fit_comparison(sim_inc, wkl_inc, "C[t]^w",
-                    "A) Incidence fit per DGP", shape = 18) -> g1
+fn              <- file.path(folder, str_glue("ifp_{var_name}_ll.rds"))
+profile_results <- mif_ll(profile_mif_results, seed = 879588259, 
+                          n_cores = detectCores(), filename = fn, Np = 5e4)
 ```
 
 ```{r}
-source("./R_scripts/apple.R")
-drv_data_obj <- get_driving_data()
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
 
-actual_mob <- drv_data_obj$df %>% 
-  mutate(week = time / 7) %>% 
-  rename(y = y2) %>% 
-  filter(week >=1 & week <= 11)
+time_record_df <- bind_rows(time_record_df, time_row)
+```
 
-map_df(mdls, function(mdl) {
-  folder   <- str_glue("./Saved_objects/Irish_data/SEI3R_{mdl}")
-  if(mdl != "SMTH") {
-    folder <- paste0(folder, "/weekly/mdl_2")
-  }
-  
-  fn       <- file.path(folder, "predictions.rds") 
-  pred_obj <-readRDS(fn)
-  
-  pred_obj$sim_mob %>% mutate(DGP = pred_obj$label)
-}) %>% filter(week >=1 & week <= 11) -> sim_mob
+```{r CIR_P_0_ll_g, message=FALSE}
+source("./R_scripts/helpers.R")
 
-plot_fit_comparison(sim_mob, actual_mob, "Z[t]",
-                    "B) Relative transmission rate fit per DGP", shape = 16) -> g2
+prof_ll <- extract_ll_df(profile_results) |>  
+  filter(!is.na(loglik)) |>  
+  filter(loglik.se < 1)
+
+profile_list_CIR[[var_name]] <- prof_ll |>  
+  mutate(profile_over = var_name)
+
+profile_list_CIR[[var_name]] |>  
+  filter(loglik > max(loglik, na.rm = TRUE) - 20)-> all
+```
+
+#### Confidence intervals
+
+\hfill
+
+\hfill
+
+```{r}
+source("./R_scripts/profile_utils.R")
+
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
+
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff, CIR_colour) -> g1
 ```
 
 ```{r}
-map_df(mdls, function(mdl) {
-  folder   <- str_glue("./Saved_objects/Irish_data/SEI3R_{mdl}")
-  if(mdl != "SMTH") {
-    folder <- paste0(folder, "/weekly/mdl_2")
-  }
-  
-  fn       <- file.path(folder, "predictions.rds") 
-  pred_obj <-readRDS(fn)
-  
-  pred_obj$Re_t %>% mutate(DGP = pred_obj$label)
-})%>% filter(week >=1 & week <= 11) -> sim_Re
+source("./R_scripts/mcap.R")
 
-ggplot(sim_Re, aes(x = week, y = q50)) +
-  geom_hline(yintercept = 1, colour = ET_colour, linetype = "dashed") +
-  geom_line(aes(group = DGP, colour = DGP)) +
-  geom_ribbon(alpha = 0.25, aes(ymin = q2.5, ymax = q97.5,
-                                fill = DGP)) +
-  geom_vline(xintercept = 1.86, colour = "grey50", linetype = "dotted") +
-  annotate("text", x = 1.96, y = 6, size = 1.5,
-             label = "Delay phase", hjust = 0, size = 3, colour = "grey50") +
-  geom_vline(xintercept = 4, colour = "grey50", linetype = "dotted") +
-  annotate("text", x = 4.1, y = 6, size = 1.5,
-             label = "Stay at home", hjust = 0, size = 3, colour = "grey50") +
-  scale_colour_manual(values = sim_colours) +
-  scale_fill_manual(values = sim_colours) +
-  labs(y = parse(text = "Re[t]"), x = "Week",
-       title = "C) Effective reproductive number per DGP")+
-  scale_x_continuous(breaks = 1:11) +
-  theme_pubr()  +
-  theme(axis.title = element_text(size = 8, colour = "grey40"),
-        axis.text  = element_text(colour = "grey60", size = 6),
-        plot.title = element_text(size = 9, colour = "grey25"),
-        axis.ticks = element_line(colour = "grey60"),
-        axis.line  = element_line(colour = "grey60")) -> g3
+span <- 0.75
+
+mcap_obj <- mcap(prof_ll$loglik, prof_ll[[var_name]], lambda = span)
+
+max_smoothed_loglik <- mcap_obj$fit$smoothed |>  max()
+
+cut_off_smth <- max_smoothed_loglik - mcap_obj$delta
+
+mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
+                              ul  = mcap_obj$ci[[2]],
+                              mle = mcap_obj$mle)
+
+plot_MCAP(prof_ll, var_name, span, CIR_colour) -> g2
 ```
+
+```{r profile_P_0_CIR_g, fig.height = 4}
+g1 / g2
+```
+
+\newpage
+
+### $\alpha$ - Volatility of effective contact rate
+
+```{r CIR_alpha}
+#===============================================================================
+var_name <- "alpha"
+#===============================================================================
+```
+
+#### Initial likelihood surface
+
+\hfill
+
+\hfill
+
+```{r, fig.height = 3.5}
+raw_likelihood(gr_CIR_df, var_name, CIR_colour)
+```
+
+<!-- ##### Exploration hypercube -->
+
+<!-- \hfill -->
+
+<!-- \hfill -->
+
+
+```{r, fig.height = 4, fig.width = 4.5, fig.align = 'center'}
+loglik_df %>% 
+  filter(loglik > max(loglik) - 20, loglik.se < 2) %>%
+  sapply(range) -> box
+
+set.seed(600014339)
+
+profile_design(
+  alpha   = seq(0.01, 0.50,length = 50),
+  lower = box[1, c("zeta" , "tau", "P_0", "nu", "upsilon")],
+  upper = box[2, c("zeta", "tau", "P_0", "nu", "upsilon")],
+  nprof = 20, type = "sobol"
+) -> guesses_alpha
+```
+
+```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
+# plot_guesses(guesses_alpha, 0.25, CIR_colour)
+```
+
+<!-- ##### Likelihood maximisation -->
+
+<!-- \hfill -->
+
+<!-- \hfill -->
+
+```{r}
+ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, nu = 0.02,
+             upsilon = 0.02)
+
+fn      <- file.path(folder, "ifp_alpha.rds")
+
+ifp_obj <- iter_filt_profile(mf1 = mifs_local[[1]], 
+                         guesses = guesses_alpha,
+                         fixed_params = fixed_params,
+                         perturbations = ptb,
+                         filename = fn,
+                         seed = 759912441, n_cores = detectCores())
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r, message = FALSE}
+profile_mif_results <- extract_mif_results(ifp_obj)
+
+profile_mif_results |> 
+  traces() |> 
+  melt() -> traces_alpha_df 
+```
+
+```{r, fig.height = 3.5}
+# mif_traces(traces_alpha_df, names(par_obj$unknown), CIR_colour)
+```
+
+
+```{r}
+fn              <- file.path(folder, "ifp_alpha_ll.rds")
+profile_results <- mif_ll(profile_mif_results, seed = 923398287,
+                          n_cores = detectCores(), filename = fn, Np = 5e4)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r CIR_alpha_ll_g, message=FALSE}
+source("./R_scripts/helpers.R")
+
+prof_ll <- extract_ll_df(profile_results) |>  
+  filter(!is.na(loglik)) |>  
+  filter(loglik.se < 1, loglik > max(loglik) - 100)
+
+profile_list_CIR[[var_name]] <- prof_ll |>  
+  mutate(profile_over = var_name)
+
+profile_list_CIR[[var_name]] |>  
+  filter(loglik > max(loglik) - 100)-> all
+```
+
+#### Confidence intervals
+
+\hfill
+
+\hfill
+
+```{r}
+source("./R_scripts/profile_utils.R")
+
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
+
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff, CIR_colour) -> g1
+```
+
+```{r}
+source("./R_scripts/mcap.R")
+
+span <- 0.75
+
+mcap_obj <- mcap(prof_ll$loglik, prof_ll[[var_name]], lambda = span)
+
+max_smoothed_loglik <- mcap_obj$fit$smoothed %>% max()
+
+cut_off_smth <- max_smoothed_loglik - mcap_obj$delta
+
+mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
+                              ul  = mcap_obj$ci[[2]],
+                              mle = mcap_obj$mle)
+
+plot_MCAP(prof_ll, var_name, span, CIR_colour) -> g2
+```
+
+```{r profile_alpha_CIR_g, fig.height = 4}
+g1 / g2
+```
+
+\newpage
+
+### $\tau$ - Variance of the measured transmission rate
+
+```{r CIR_tau}
+#===============================================================================
+var_name <- "tau"
+#===============================================================================
+```
+
+#### Initial likelihood surface
+
+\hfill
+
+\hfill
+
+```{r, fig.height = 3.5}
+raw_likelihood(gr_CIR_df, var_name,
+               CIR_colour)
+```
+
+<!-- ##### Exploration hypercube -->
+
+<!-- \hfill -->
+
+<!-- \hfill -->
+
+
+```{r, fig.height = 4, fig.width = 4.5, fig.align = 'center'}
+loglik_df %>% 
+  filter(loglik > max(loglik)- 20, loglik.se < 2) %>%
+  sapply(range) -> box
+
+set.seed(358559280)
+
+profile_design(
+  tau   = seq(0.005, 0.50,length = 50),
+  lower = box[1, c("zeta" , "alpha", "P_0", "nu", "upsilon")],
+  upper = box[2, c("zeta", "alpha", "P_0", "nu", "upsilon")],
+  nprof = 20, type = "sobol"
+) -> guesses_tau
+```
+
+```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
+# plot_guesses(guesses_tau, 0.25, CIR_colour)
+```
+
+<!-- ##### Likelihood maximisation -->
+
+<!-- \hfill -->
+
+<!-- \hfill -->
+
+```{r}
+ptb <- rw.sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, nu = 0.02,
+             upsilon = 0.02)
+
+fn      <- file.path(folder, "ifp_tau.rds")
+
+ifp_obj <- iter_filt_profile(mf1 = mifs_local[[1]], 
+                         guesses = guesses_tau,
+                         fixed_params = fixed_params,
+                         perturbations = ptb,
+                         filename = fn,
+                         seed = 139567891, n_cores = detectCores())
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r}
+profile_mif_results <- extract_mif_results(ifp_obj)
+
+profile_mif_results |>  
+  traces() |> 
+  melt() -> traces_alpha_df 
+```
+
+```{r, fig.height = 3.5}
+# mif_traces(traces_alpha_df, names(par_obj$unknown), CIR_colour)
+```
+
+
+```{r}
+fn              <- file.path(folder, str_glue("ifp_{var_name}_ll.rds"))
+profile_results <- mif_ll(profile_mif_results, seed = 124029086, 
+                          n_cores = detectCores(), filename = fn, Np = 5e4)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r CIR_tau_ll_g, message=FALSE}
+source("./R_scripts/helpers.R")
+
+prof_ll <- extract_ll_df(profile_results) |>  
+  filter(!is.na(loglik)) |>  
+  filter(loglik.se < 1)
+
+profile_list_CIR[[var_name]] <- prof_ll |>  
+  mutate(profile_over = var_name)
+
+profile_list_CIR[[var_name]] -> all
+```
+
+#### Confidence intervals
+
+\hfill
+
+\hfill
+
+```{r}
+source("./R_scripts/profile_utils.R")
+
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
+
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff, CIR_colour) -> g1
+```
+
+```{r}
+source("./R_scripts/mcap.R")
+
+span <- 0.75
+
+mcap_obj <- mcap(prof_ll$loglik, prof_ll[[var_name]], lambda = span)
+
+max_smoothed_loglik <- mcap_obj$fit$smoothed |>  max()
+
+cut_off_smth <- max_smoothed_loglik - mcap_obj$delta
+
+mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
+                              ul  = mcap_obj$ci[[2]],
+                              mle = mcap_obj$mle)
+
+plot_MCAP(prof_ll, var_name, span, CIR_colour) -> g2
+```
+
+```{r profile_tau_CIR_g, fig.height = 4}
+g1 / g2
+```
+
+\newpage
+
+### $\nu$ - Adjustment speed
+
+```{r}
+#===============================================================================
+var_name <- "nu"
+#===============================================================================
+```
+
+#### Initial likelihood surface
+
+\hfill
+
+\hfill
+
+```{r, fig.height = 3.5}
+raw_likelihood(gr_CIR_df, var_name, CIR_colour)
+```
+
+<!-- ##### Exploration hypercube -->
+
+<!-- \hfill -->
+
+<!-- \hfill -->
+
+
+```{r, fig.height = 4, fig.width = 4.5, fig.align = 'center'}
+loglik_df %>% 
+  filter(loglik > max(loglik)- 20, loglik.se < 2) |> 
+  sapply(range) -> box
+
+set.seed(363292494)
+
+profile_design(
+  nu   = seq(0.001, 0.3,length = 100),
+  lower = box[1, c("zeta" , "alpha", "P_0", "tau", "upsilon")],
+  upper = box[2, c("zeta", "alpha", "P_0", "tau", "upsilon")],
+  nprof = 20, type = "sobol"
+) -> guesses_nu
+```
+
+```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
+# plot_guesses(guesses_nu, 0.25, CIR_colour)
+```
+
+
+<!-- ##### Likelihood maximisation -->
+
+<!-- \hfill -->
+
+<!-- \hfill -->
+
+```{r}
+ptb <- rw.sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, tau = 0.02,
+             upsilon = 0.02)
+
+fn      <- file.path(folder, "ifp_nu.rds")
+
+ifp_obj <- iter_filt_profile(mf1 = mifs_local[[1]], 
+                         guesses = guesses_nu,
+                         fixed_params = fixed_params,
+                         perturbations = ptb,
+                         filename = fn,
+                         seed = 972740300, n_cores = detectCores())
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r}
+profile_mif_results <- extract_mif_results(ifp_obj)
+
+profile_mif_results |>  
+  traces() |> 
+  melt() -> traces_df 
+```
+
+```{r, fig.height = 3.5}
+# mif_traces(traces_df, names(par_obj$unknown), CIR_colour)
+```
+
+
+```{r CIR_nu_ll}
+fn              <- file.path(folder, str_glue("ifp_{var_name}_ll.rds"))
+profile_results <- mif_ll(profile_mif_results, seed = 256315391, 
+                          n_cores = detectCores(), filename = fn, Np = 5e4)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r CIR_nu_ll_g, message=FALSE}
+source("./R_scripts/helpers.R")
+
+prof_ll <- extract_ll_df(profile_results) |> 
+  filter(!is.na(loglik)) |>  
+  filter(loglik.se < 1)
+
+profile_list_CIR[[var_name]] <- prof_ll |>  
+  mutate(profile_over = var_name)
+
+profile_list_CIR[[var_name]] |>  filter(loglik > max(loglik -100)) -> all
+```
+
+#### Confidence intervals
+
+\hfill
+
+\hfill
+
+```{r}
+source("./R_scripts/profile_utils.R")
+
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
+
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff, CIR_colour) -> g1
+```
+
+```{r CIR_mcap_nu}
+source("./R_scripts/mcap.R")
+
+span <- 0.75
+
+mcap_obj <- mcap(prof_ll$loglik, prof_ll[[var_name]], lambda = span)
+
+max_smoothed_loglik <- mcap_obj$fit$smoothed |>  max()
+
+cut_off_smth <- max_smoothed_loglik - mcap_obj$delta
+
+mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
+                              ul  = mcap_obj$ci[[2]],
+                              mle = mcap_obj$mle)
+
+plot_MCAP(prof_ll, var_name, span, CIR_colour) -> g2
+```
+
+```{r profile_nu_CIR_g, fig.height = 4}
+g1 / g2
+```
+
+\newpage
+
+### $\upsilon$ - Long-term goal
+
+```{r}
+#===============================================================================
+var_name <- "upsilon"
+#===============================================================================
+```
+
+#### Initial likelihood surface
+
+\hfill
+
+\hfill
+
+```{r, fig.height = 3}
+raw_likelihood(gr_CIR_df, var_name, CIR_colour)
+```
+
+<!-- ##### Exploration hypercube -->
+
+<!-- \hfill -->
+
+<!-- \hfill -->
+
+
+```{r, fig.height = 4, fig.width = 4.5, fig.align = 'center'}
+loglik_df |>  
+  filter(loglik > max(loglik) - 20, loglik.se < 2) %>%
+  sapply(range) -> box
+
+set.seed(300038986)
+
+profile_design(
+  upsilon   = seq(0, 1, length = 50),
+  lower     = box[1, c("zeta", "alpha", "P_0", "tau", "nu")],
+  upper     = box[2, c("zeta", "alpha", "P_0", "tau", "nu")],
+  nprof     = 20, type = "sobol"
+) -> guesses_upsilon
+```
+
+```{r, fig.height = 4, fig.width = 7, fig.align = 'center'}
+#plot_guesses(guesses_upsilon, 0.25, CIR_colour)
+```
+
+<!-- ##### Likelihood maximisation -->
+
+<!-- \hfill -->
+
+<!-- \hfill -->
+
+```{r}
+ptb <- rw.sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, tau = 0.02,
+             nu = 0.02)
+
+fn      <- file.path(folder, "ifp_upsilon.rds")
+
+ifp_obj <- iter_filt_profile(mf1 = mifs_local[[1]], 
+                         guesses = guesses_upsilon,
+                         fixed_params = fixed_params,
+                         perturbations = ptb,
+                         filename = fn,
+                         seed = 236721874, n_cores = detectCores())
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ml",
+                       time = calculate_time(ifp_obj$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r, message = FALSE, fig.height = 3.5}
+profile_mif_results <- extract_mif_results(ifp_obj)
+
+profile_mif_results |>  
+  traces() |> 
+  melt() -> traces_upsilon_df 
+```
+
+```{r, fig.height = 3.5}
+# mif_traces(traces_upsilon_df, names(par_obj$unknown), CIR_colour)
+```
+
+
+```{r CIR_upsilon_ll}
+fn              <- file.path(folder, str_glue("ifp_{var_name}_ll.rds"))
+profile_results <- mif_ll(profile_mif_results, seed = 203319210, 
+                          n_cores = detectCores(), filename = fn, Np = 5e4)
+```
+
+```{r}
+time_row <- data.frame(par  = var_name, 
+                       step = "pl_ll",
+                       time = calculate_time(profile_results$time))
+
+time_record_df <- bind_rows(time_record_df, time_row)
+```
+
+```{r CIR_upsilon_ll_g, message=FALSE}
+source("./R_scripts/helpers.R")
+
+prof_ll <- extract_ll_df(profile_results) |> 
+  filter(!is.na(loglik)) |> 
+  filter(loglik.se < 1)
+
+profile_list_CIR[[var_name]] <- prof_ll |>  
+  mutate(profile_over = var_name)
+
+profile_list_CIR[[var_name]] -> all
+```
+
+#### Confidence intervals
+
+\hfill
+
+\hfill
+
+```{r}
+source("./R_scripts/profile_utils.R")
+
+# Unadjusted profile estimates
+ape <- get_unadjusted_profile(profile_list_CIR[[var_name]], var_name)
+
+unadjusted_profile_list[[var_name]] <-  ape$estimates
+
+profile_plot(profile_list_CIR[[var_name]], var_name, ape$maxloglik,
+             ape$cutoff, CIR_colour) -> g1
+```
+
+
+```{r CIR_mcap_upsilon}
+source("./R_scripts/mcap.R")
+
+span <- 0.75
+
+mcap_obj <- mcap(prof_ll$loglik, prof_ll[[var_name]], lambda = span)
+
+max_smoothed_loglik <- mcap_obj$fit$smoothed |>  max()
+
+cut_off_smth <- max_smoothed_loglik - mcap_obj$delta
+
+mcap_list[[var_name]] <- list(ll  = mcap_obj$ci[[1]] ,
+                              ul  = mcap_obj$ci[[2]],
+                              mle = mcap_obj$mle)
+
+plot_MCAP(prof_ll, var_name, span, CIR_colour) -> g2
+```
+
+```{r profile_upsilon_CIR_g, fig.height = 4}
+g1 / g2
+```
+
+```{r}
+dest_file <- file.path(folder, "elapsed_time.csv")
+write_csv(time_record_df, dest_file)
+
+total_time <- sum(time_record_df$time)
+```
+
+
+It took approximately `r round(total_time / 60, 0)` hours to carry out the
+inference process (iterated filtering + particle filter) on DGP2's fixed
+parameters.
+
+\newpage
+
+### Estimates
+
+In this section, we present a summary of the estimates obtained from the 
+profile likelihood.
+
+#### From the likelihood surface
+
+\hfill
+
+We collate all the likelihood estimates from the previous steps into a single
+database. The resulting likelihood surfaces exhibit quadratic shapes 
+(shown below). We, therefore, assume that these surfaces are approximations of
+the likelihood profiles. Following this assumption, we estimate each parameter's
+95% confidence intervals.
+
+\hfill
+
+```{r}
+source("./R_scripts/build_likelihood_surface.R")
+
+ll_surface <- build_likelihood_surface(folder, names(par_obj$unknown))
+
+ll_surface |> 
+  mutate(.id = row_number()) |>  
+  pivot_longer(c(-.id,-loglik)) |>  
+  filter(loglik > max(loglik, na.rm = TRUE) - 3.5) -> tidy_prof
+
+cutoff <- max(tidy_prof$loglik) - 0.5 * qchisq(df = 1,p = 0.95)
+ 
+plot_lik_surface(tidy_prof, CIR_colour)
+```
+
+```{r CIR_surf_est}
+mle    <- filter(tidy_prof, loglik == max(loglik)) |> 
+  select(-.id, -loglik) |> 
+  mutate(type = "mle")
+
+write_csv(mle, file.path(folder, "mle.csv"))
+
+lims_df <- tidy_prof |> filter(loglik >= cutoff) |>  group_by(name) |> 
+  summarise(value = range(value), type = c("ll", "ul")) |>  
+  ungroup()
+
+par_summary <- bind_rows(lims_df, mle) |>  
+  pivot_wider(values_from = value, names_from = type)
+
+zeta_estimates <- par_summary |>  filter(name == "zeta") |>  
+  select(-name) |>  unlist()
+
+R_estimates <- estimate_r(zeta_estimates) |>  bind_rows()
+R_row       <- data.frame(name = "Re_0") |>  bind_cols(R_estimates)
+
+par_summary <- bind_rows(par_summary, R_row) |>  
+  select(name, mle, ll, ul) 
+
+surf_est <- par_summary |>  mutate(method = "Surface")
+
+colnames(par_summary) <- c("Parameter", "MLE", "Lower limit", "Upper limit")
+
+par_summary <-   format_names_latex(par_summary)
+
+knitr::kable(par_summary |> 
+               arrange(Parameter), "latex", booktabs = TRUE, escape = FALSE,
+             digits = 3)
+```
+
+\newpage
+
+#### From likelihood profiles
+
+\hfill
+
+\hfill
+
+```{r}
+source('./R_scripts/profile_utils.R')
+
+par_summary <- get_par_summary(unadjusted_profile_list)
+prof_est    <- par_summary |>  mutate(method = "Profile")
+
+colnames(par_summary) <- c("Parameter", "MLE", "Lower limit", "Upper limit")
+par_summary           <- format_names_latex(par_summary)
+
+knitr::kable(par_summary |>  arrange(Parameter), "latex", booktabs = TRUE,
+             escape = FALSE, digits = 3)
+```
+
+#### From MCAP
+
+\hfill
+
+\hfill
+
+```{r MCAP_est}
+par_summary <- get_par_summary(mcap_list)
+mcap_est    <- par_summary |>  mutate(method = "MCAP")
+
+colnames(par_summary) <- c("Parameter", "MLE", "Lower limit", "Upper limit")
+par_summary           <- format_names_latex(par_summary)
+
+knitr::kable(par_summary |>  arrange(Parameter), "latex", booktabs = TRUE,
+             escape = FALSE, digits = 3)
+```
+
+#### Comparison
+
+\hfill
+
+\hfill
+
+```{r par_summary_g, dev = 'cairo_pdf', fig.height = 4}
+
+all_est <- rbind(surf_est, mcap_est, prof_est)
+
+fn_est <- file.path(folder, "par_estimates.csv")
+write_csv(all_est, fn_est)
+
+par_comparison_stochastic(all_est)
+```
+
+# Prediction
+
+The reader should recall that we obtain predictions for the latent states from
+the filtering distribution, which is intractable. To circumvent this difficulty,
+we use samples to approximate it. We briefly describe such a process.
+
+## Sampling space
+
+First, we define a hypercube near the MLE (neighbourhood). 
+
+\hfill
+
+```{r GBM_sampling_space}
+unk_par_MLE <- tidy_prof |>  
+  filter(loglik > max(loglik, na.rm = T) - 3.5) |> 
+  pivot_wider(names_from = name, values_from = value) |>  
+  select(-loglik, -`.id`)
+
+plot_MLE_neighbourhood(unk_par_MLE, CIR_colour)
+```
+
+\newpage
+
+## Draws
+
+We then model the MLE's neighbourhood as a copula, from which sets of samples are
+drawn and whose marginal probability distributions are uniform but correlated at
+higher dimensions. We follow this procedure (instead of a hypercube) to address
+the complexity in this parameter space, where slight deviations from the regions
+of high likelihood yield unreasonably low values.
+
+
+```{r}
+sapply(unk_par_MLE, function(col) {
+  min_col <- min(col)
+}) -> lower_lims
+
+sapply(unk_par_MLE, function(col) {
+  max_col <- max(col)
+}) -> upper_lims
+
+set.seed(722304622)
+
+params <- sobol_design(lower = lower_lims,
+                      upper = upper_lims,
+                      nseq  = 200)
+
+lapply(unk_par_MLE, function(col) {
+  range_col <- range(col)
+  
+  list(min = range_col[[1]],
+       max = range_col[[2]])
+}) -> lims
+```
+
+```{r}
+cor_m     <-cor(unk_par_MLE)
+cor_coefs <- cor_m[upper.tri(cor_m)]
+
+set.seed(172783321)
+
+n_unk <- ncol(unk_par_MLE)
+
+myCop <- normalCopula(param = cor_coefs, 
+                      dim = n_unk, dispstr = "un")
+
+myMvd <- mvdc(copula = myCop, margins = rep("unif", n_unk),
+              paramMargins = lims)
+
+params           <- rMvdc(200, myMvd) |>  data.frame()
+colnames(params) <- colnames(unk_par_MLE)
+
+plot(params, labels_CIR[-1], col = CIR_colour)
+```
+
+```{r}
+source("./R_scripts/hindcast.R")
+
+results_obj <- hindcast(params, pomp_mdl, fixed_params, folder, 10092238,
+                        detectCores())
+```
+
+\newpage
+
+## Cutoff
+
+Using the sets of draws from the previous section (200), we run the particle 
+filter and estimate their likelihood. Even though the copula prevents, to some 
+extent, the exploration of undesired regions of the parameter space that may 
+bias the results, some runs yield abnormal likelihood values. The violin plot 
+below shows the likelihood distribution at different cut-off log-lik values. 
+We notice that, in all plots, the likelihood concentrates on a common region, 
+but several outliers skew the distributions.
+
+
+In this graph, we explore the distribution of the log likelihood values for each
+starting coordinate at different cut-off points.
+
+\hfill
+
+```{r}
+# Compute boxplot statistics
+
+loglik_id    <- file.path(folder, "C.rds") |> readRDS() |> 
+    group_by(id) |>  slice(1) |> ungroup() |> 
+  mutate(state = ifelse(loglik > max(loglik) - 20, "in", "out")) |> 
+  select(id, loglik, state)
+
+
+cutoff_vector <- c("1e1", "2e1", "5e1", "1e2", "5e2", "1e3")
+
+cutoffs <- factor(cutoff_vector, levels = cutoff_vector)
+
+df_list <- purrr::map(cutoffs, function(co) {
+  co_val <- as.numeric(as.character(co))
+  
+  df <- loglik_id |>  filter(loglik > max(loglik) - co_val) |> 
+  mutate(cutoff = co)
+  
+  stats <- boxplot.stats(df$loglik)$stats
+  bp_df <- data.frame(x = co, ymin=stats[1], lower=stats[2], middle=stats[3],
+                 upper=stats[4], ymax=stats[5])
+  
+  list(filtered_df = df,
+       bp_df       = bp_df)
+})
+
+df <- map_df(df_list, "filtered_df")
+
+bp <- map_df(df_list, "bp_df")
+```
+
+```{r, fig.height = 3}
+ggplot(df, aes(x = cutoff, y = loglik)) +
+  geom_violin(aes(group = cutoff), colour = CIR_colour) +
+  facet_wrap(~cutoff, scales = "free") +
+  theme_pubr() +
+  theme(axis.text = element_text(size = 6))
+```
+
+This outcome suggests that using all the samples may bias the estimates towards
+low probability regions, or even worse, produce computation overflows. Thus, 
+we opt for a cut-off of 20 log-likelihood units (or $485\times10^6$ likelihood 
+units) given that it contains 67 % of all the starting points and appears to 
+include only a few outliers. It can be seen that these *outliers* are 
+concentrated at the edges of the likelihood surface (high values of 
+$\upsilon$ and $\nu$). These results highlight the complex surface created by 
+this particular high-dimensional DGP. The figure below compares included (light
+colour) and excluded (dark colour) parameter values.
+
+\hfill
 
 ```{r, fig.height = 6}
-g1 / g2 / g3 / guide_area() + 
-  plot_layout(guides = 'collect') -> g
-print(g)
+params |>  mutate(id = row_number()) |> 
+  left_join(loglik_id, by = "id") |> 
+  filter(!is.na(state)) |> 
+  rename(`P[0]` = P_0) -> analysis_df
+
+ggpairs(analysis_df, columns = c(1:6, 9), 
+        labeller = label_parsed,
+        aes(colour = state, fill = state), 
+        upper = list(continuous = "blank",
+                     combo      = "box")) +
+  scale_colour_manual(values = c("#EE7DA5", "#813954")) +
+  scale_fill_manual(values = c("#EE7DA5", "#813954")) +
+  theme_pubr() +
+  theme(axis.text = element_text(size = 5))
+```
+
+\newpage
+
+We further compared the excluded sets against the likelihood surface (grey).
+Essentially, we notice that values near the upper limit of $\upsilon$, $\nu$,
+and to a lesser extent, $\zeta$ lead to numerical instability.
+
+\hfill
+
+```{r, fig.height = 6}
+out_df <- analysis_df |>  filter(state == "out", !is.na(state)) |> 
+  select(-id, -loglik)
+
+unk_par_MLE |>  mutate(state = "surf") |> 
+  rename(`P[0]` = P_0) |>  
+  bind_rows(out_df) -> comparison_df
+
+ggpairs(comparison_df, aes(colour = state),
+        upper = list(continuous = "blank",
+                     combo      = "box"),
+        labeller = label_parsed) +
+  scale_colour_manual(values = c("#813954", "grey85")) +
+  scale_fill_manual(values = c("#813954", "grey85")) +
+  theme_pubr() +
+  theme(axis.text = element_text(size = 5))
+```
+
+\newpage
+
+## Hidden states
+
+Finally, from the selected samples, we approximate the filtering distribution at
+each time step.
+
+\hfill
+
+```{r}
+summary_vars <- c("C", "Z", "Re")
+
+summary_list <- lapply(summary_vars, summarise_hindcast, TRUE)
+```
+
+```{r sampling_filt_dist}
+seeds <- c(733502013, 893244539, 127005223)
+
+lapply(1:3, function(var_pos) {
+  sample_filt_dist(summary_vars[[var_pos]], folder, seeds[[var_pos]], TRUE)
+}) -> sample_list
 ```
 
 
 ```{r}
-fig_path <- "./paper_plots/Fig_07_Comparison.pdf"
-ggsave(fig_path, 
-       g, dpi = "print",
-       height = 7, width = 5)
+pred_df <- mutate(summary_list[[1]], week = 1:11)
+
+actual_inc_df <- rename(obs_df, y = y1)
+
+plot_wkl_fit(pred_df, actual_inc_df, y_lab = "C[t]", "A) Incidence", shape = 18, 
+             CIR_colour) -> g1
+
+plot_filt_dist(sample_list[[1]], actual_inc_df, y_label = "C[t]", 
+               CIR_colour) -> g1b
 ```
-       
+
+```{r}
+actual_df <- rename(obs_df, y = y2)
+pred_df <- mutate(summary_list[[2]], week = 1:11)
+plot_wkl_fit(pred_df, actual_df, y_lab = "Z[t]", "B) Relative transmission rate", 
+             shape = 16, CIR_colour) -> g2
+
+plot_filt_dist(sample_list[[2]], actual_df, "Z[t]", CIR_colour) -> g2b
+```
+
+```{r}
+pred_df <- mutate(summary_list[[3]], week = 1:11)
+plot_hidden_re(pred_df, CIR_colour, "C) Effective reproductive number") -> g3
+plot_filt_dist_re(sample_list[[3]], actual_inc_df, CIR_colour) -> g3b
+```
+
+
+```{r, fig.height = 7, dev = 'cairo_pdf'}
+fig_path <- "./paper_plots/Fig_05_CIR.pdf"
+
+ggsave(fig_path, 
+       plot = (g1 | g1b) / (g2 | g2b) / (g3 | g3b), dpi = "print",
+       height = 7, width = 5, device = cairo_pdf)
+
+ggsave("./paper_plots/Fig_05_CIR.eps", 
+       plot = (g1 | g1b) / (g2 | g2b) / (g3 | g3b),
+       height = 7, width = 5, device = cairo_ps)
+
+g1 / g2 / g3
+```
+
+\newpage
+
+# Original Computing Environment
+
+```{r}
+sessionInfo()
+```

@@ -8,17 +8,18 @@ header-includes:
 ---
 
 A critical requirement for parameter inference on State-Space Models is the
-robustness of likelihood estimates. Namely, different runs yield similar 
-log-likelihood values from a single set of parameters. Consequently, in this 
-appendix, we formulate and assess the convergence of six measurement model 
-candidates that account for the observed incidence. Some models account for the
-relative contact rate, assuming mobility data as a proxy observation. We couple
-those candidate measurements models with two process models. The first process 
-model (PM1) describes the relative contact rate of the SEI3R within-host profile
-in terms of Geometric Brownian Motion. The other process model (PM2) employs the
-Cox-Ingersoll-Ross formulation to describe the relative contact rate. 
-Furthermore, we perform a sensitivity analysis on the accuracy of the likelihood
-estimates under various integration step sizes. Overall, the results allow us to
+robustness of likelihood estimates. Namely, different runs ought to yield 
+similar log-likelihood values from a single set of parameters (model 
+configuration). Consequently, in this appendix, we formulate and assess the 
+convergence of six measurement model candidates that account for the observed 
+incidence. Some models account for the relative contact rate, assuming mobility 
+data as a proxy observation. We couple those candidate measurements models with 
+two process models. The first process model (PM1) describes the relative contact
+rate of the SEI3R within-host profile in terms of Geometric Brownian Motion. The
+other process model (PM2) employs the Cox-Ingersoll-Ross formulation to describe
+the relative contact rate. Specifically, we perform a sensitivity analysis on 
+the accuracy of the likelihood estimates under various particle and integration 
+step sizes for each chosen model configuration. Overall, the results allow us to
 identify possible model misspecifications and to select an appropriate 
 integration step and sample size in a context of finite computational resources.
 
@@ -59,9 +60,9 @@ dts    <- 1 / denoms
 # Data
 
 In this work, we base the inference process on two datasets. The first dataset 
-corresponds to the number of COVID-19 cases detected in during Ireland's first 
-wave, from 29 February 2020 to 17 May 2020. We refer to this dataset as $y^1$,
-and distinguish between to aggregation levels: daily ($y^1_d$) and weekly 
+corresponds to the number of COVID-19 cases detected during Ireland's first 
+wave, from 29 February 2020 to 17 May 2020. We refer to this dataset as $y^1$
+and distinguish between two aggregation levels: daily ($y^1_d$) and weekly 
 ($y^1_w$). The second dataset ($y^1$) is Apple's driving mobility index which 
 quantifies the number of requests made to Apple Maps for directions. These 
 indexes are normalised to the value on 28 February 2020. Furthermore, given that
@@ -93,9 +94,15 @@ g4            <- plot_wkl_mobility(daily_mob_df)
 
 save_plot <- (g1 | g2) / (g3 | g4)  
 
-fig_path <- str_glue("./paper_plots/Fig_02_Data.pdf")
+dvc      <- "pdf"
+fig_path <- str_glue("./paper_plots/Fig_02_Data.{dvc}")
 
 ggsave(fig_path, plot = save_plot, height = 5, width = 5)
+
+dvc      <- "eps"
+fig_path <- str_glue("./paper_plots/Fig_02_Data.{dvc}")
+ggsave(filename = fig_path, plot = save_plot, device = cairo_ps, height = 5, 
+       width = 5)
 
 save_plot
 ```
@@ -156,8 +163,8 @@ save_plot
 
 ### Testing points
 
-We use five point estimates (table below) as probes to assess the reliability of 
-likelihood estimates.  
+We use five point estimates near the MLE (table below) as probes to assess the
+reliability of likelihood estimates.  
 
 \hfill
 
@@ -198,20 +205,21 @@ these models using three features:
 * Whether we fit the model to **daily** or **weekly** data.
 * Whether we model incidence measurements using the **Poisson** or the 
 **Negative binomial** distribution.
-* Whether the model incorporates the mobility data as a proxy for relative
-effective contact rate. We assume these are normally distributed measurements.
+* Whether the model incorporates the mobility data as a proxy measurement for 
+the relative effective contact rate. We assume these measurements are normally 
+distributed.
 
 \hfill
 
 For each probe (point estimate) and model candidate, we run the particle filter
-16 times for various integration step sizes. For each batch of 16 runs, we
-estimate the log-likelihood mean, the log-likelihood standard error, and the 
-computational time. 
+16 times. We repeat the process for various particle and integration step sizes.
+For each batch of 16 runs, we estimate the log-likelihood mean, the 
+log-likelihood standard error, and the computational time. 
 
 In a nutshell, the results indicate that when one models daily incidence
 measurements with the Poisson distribution, the particle filter does not 
 converge as the number of particles increases. This finding suggests model
-misspecification under such assumption.
+misspecification under such an assumption.
 
 Furthermore, the accuracy of log-likelihood estimates is not compromised by a 
 relative large integration step, which diminishes the burden on computational
@@ -226,7 +234,7 @@ models_df <- data.frame(
   Frequency       = c("Daily", "Daily", "Daily", "Daily", "Weekly", "Weekly"),
   Incidence_model = c("Pois", "Nbin", "Pois", "Nbin", "Pois", "Pois"), 
   Mobility_model  = c(FALSE, FALSE, TRUE, TRUE, FALSE, TRUE),
-  Convergence     = c("No", "Yes", "No", "Yes", "Yes", "Yes"))
+  Converges       = c("No", "Yes", "No", "Yes", "Yes", "Yes"))
 
 kable_df <- models_df
 
@@ -263,12 +271,11 @@ incorporate mobility data.
 
 \hfill
 
-The results of this test show that the likelihood standard error **does NOT**
-tend to zero as the number of particles increases. As a consequence, we cannot
-proceed with the next step in the inference process. That is, using the
-iterated filtering algorithm for parameter inference inasmuch as this 
-plug-and-play method relies on robust likelihood estimates. Moreover, this 
-result is also a signal of model misspecification.
+This test shows that the likelihood standard error **does NOT** tend to zero as 
+the number of particles increases. As a consequence, we cannot proceed with the 
+next step in the inference process. That is, using the Iterated Filtering
+algorithm for parameter inference inasmuch as this plug-and-play method relies
+on robust likelihood estimates. Moreover, this result is also a signal of model misspecification.
 
 \hfill
 
@@ -338,10 +345,10 @@ incorporate mobility data.
 \hfill
 
 As we will see below, these likelihood estimates converge. For this and other 
-models that exhibit convergence, we present a plot where we compare the 
-computational time elapsed to obtain likelihood estimates for the testing 
-point # 1. We do so for several scenarios. Here, scenarios refer to the number
-of particles and the integration step size.
+models that exhibit convergence, we present a plot comparing computational time
+elapsed in order to obtain likelihood estimates for testing point # 1. We do so 
+for several scenarios. Here, scenarios refer to the number of particles and the
+integration step size.
 
 \hfill
 
@@ -773,8 +780,8 @@ plot_ll_se(sens_df, GBM_colour)
 
 ### Testing points
 
-We use five point estimates (table below) as probes to assess the reliability of 
-likelihood estimates.  
+We use five point estimates near the MLE (table below) as probes to assess the
+reliability of likelihood estimates.  
 
 \hfill
 
@@ -808,10 +815,10 @@ knitr::kable(kable_df, "latex", booktabs = TRUE,
 
 ### Summary
 
-In a similar manner to the procedure followed in the previous section, we
-couple the CIR process model (PM2) with those six measurement model candidates
-formulated for the GBM process model (PM1), and repeat the analysis.
-In doing so, we obtain identical insights.
+Similarly to the procedure followed in the previous section, we couple the CIR
+process model (PM2) with those six measurement model candidates formulated for
+the GBM process model (PM1) and repeat the analysis. In doing so, we obtain 
+identical insights.
 
 \hfill
 
