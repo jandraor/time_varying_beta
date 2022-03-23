@@ -6,7 +6,7 @@ This repository contains code for the paper:
 [Jair Andrade](https://www.linkedin.com/in/jandraor/) and [Jim
 Duggan](https://ie.linkedin.com/in/jduggan). *Inferring the effective
 reproductive number from deterministic and semi-deterministic
-compartmental models using incidence and mobility data*
+compartmental models using incidence and mobility data*.
 
 The analysis in this study can be reproduced by executing the files:
 
@@ -44,7 +44,7 @@ accounts for incidence and transmission rates, where mobility data is
 assumed as a proxy of the transmission rate. We perform inference on
 these structures using Iterated Filtering and the Particle Filter. The
 final DGP (DGP3) is built from a pool of deterministic models that
-describe the transmission rate as information delays. We calibrate the
+describe the transmission rate as information delays. We calibrate these
 pool of models to incidence reports using Hamiltonian Monte Carlo. By
 following this complementary approach, we assess the tradeoffs
 associated with each formulation and reflect on the benefits/risks of
