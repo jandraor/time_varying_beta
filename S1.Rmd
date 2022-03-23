@@ -63,7 +63,7 @@ In this work, we base the inference process on two datasets. The first dataset
 corresponds to the number of COVID-19 cases detected during Ireland's first 
 wave, from 29 February 2020 to 17 May 2020. We refer to this dataset as $y^1$
 and distinguish between two aggregation levels: daily ($y^1_d$) and weekly 
-($y^1_w$). The second dataset ($y^1$) is Apple's driving mobility index which 
+($y^1_w$). The second dataset ($y^2$) is Apple's driving mobility index which 
 quantifies the number of requests made to Apple Maps for directions. These 
 indexes are normalised to the value on 28 February 2020. Furthermore, given that
 data for May 11-12 is missing, we approximate such values using linear
@@ -163,8 +163,12 @@ save_plot
 
 ### Testing points
 
-We use five point estimates near the MLE (table below) as probes to assess the
-reliability of likelihood estimates.  
+We use five point estimates (table below) as probes to assess the reliability of
+likelihood estimates. These point estimates correspond to _plausible_ values
+obtained in a earlier version of this inference analysis. For the final version,
+we assume such values as **given**, and conduct the analysis from the start. 
+Considering that these tests are not intended to be exhaustive but rather of 
+exploratory nature, any arbitrary point is valid as a probe.
 
 \hfill
 
@@ -780,8 +784,12 @@ plot_ll_se(sens_df, GBM_colour)
 
 ### Testing points
 
-We use five point estimates near the MLE (table below) as probes to assess the
-reliability of likelihood estimates.  
+We use five point estimates (table below) as probes to assess the reliability of
+likelihood estimates. These point estimates correspond to _plausible_ values
+obtained in a earlier version of this inference analysis. For the final version,
+we assume such values as **given**, and conduct the analysis from the start. 
+Considering that these tests are not intended to be exhaustive but rather of 
+exploratory nature, any arbitrary point is valid as a probe.
 
 \hfill
 
