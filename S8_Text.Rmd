@@ -1,5 +1,5 @@
 ---
-title: "S5 Appendix"
+title: "S8 Appendix"
 output: 
   pdf_document:
     number_sections: true
@@ -171,7 +171,7 @@ g_daily / g_wkl_inc[[1]] / g_wkl_inc[[2]]
 The inference of time-independent parameters across Models 2, 5, and 6 
 reinforces the message outlined in the preceding sections: Models 2 
 and 5 estimate similar quantities, whereas Model 6 yields more precise 
-estimates (thanks to the incorporation of mobility data).
+estimates (due to the incorporation of mobility data).
 
 \hfill
 
@@ -199,8 +199,8 @@ plot_par_comparison(par_summary)
 
 _This section is added for reproducibility purposes._
 
-We simulate DGP1 and DGP2 using the Maximum Likelihood Estimate (obtained in S2d
-and S3, respectively). These simulations produce sample trajectories of 
+We simulate DGP1 and DGP2 using the Maximum Likelihood Estimate (obtained in S5
+and S6, respectively). These simulations produce sample trajectories of 
 $\beta_t$, which are showcased in the main document.
 
 \hfill

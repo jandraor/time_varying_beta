@@ -225,10 +225,10 @@ measurements with the Poisson distribution, the particle filter does not
 converge as the number of particles increases. This finding suggests model
 misspecification under such an assumption.
 
-Furthermore, the accuracy of log-likelihood estimates is not compromised by a 
-relative large integration step, which diminishes the burden on computational
-resources. On the contrary, and as expected in Monte Carlo simulation, the
-accuracy relies on the number of samples (particles).
+Furthermore, the accuracy of log-likelihood estimates is not compromised by 
+relative large integration steps (e.g., $\frac{1}{8}$), which diminishes the
+burden on computational resources. On the contrary, and as expected in Monte 
+Carlo simulation, the accuracy relies on the number of samples (particles).
 
 \hfill
 

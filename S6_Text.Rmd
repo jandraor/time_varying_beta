@@ -1,5 +1,5 @@
 ---
-title: "S3 Appendix"
+title: "S6 Appendix"
 output: 
   pdf_document:
     number_sections: true
@@ -1318,7 +1318,7 @@ total_time <- sum(time_record_df$time)
 ```
 
 
-It took approximately `r round(total_time / 60, 0)` hours to carry out the
+It took approximately `r round(total_time / 60, 0)` hours to compute the
 inference process (iterated filtering + particle filter) on DGP2's fixed
 parameters.
 
