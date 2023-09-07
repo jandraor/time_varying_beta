@@ -182,7 +182,7 @@ Maximum Likelihood Estimate (MLE) via Iterated Filtering. We repeat this process
 
 ```{r}
 source("./R_scripts/local_search.R")
-ptb    <- rw.sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, alpha = 0.02)
+ptb    <- rw_sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, alpha = 0.02)
 fn     <- file.path(folder, "local_search.rds")
 ls_obj <- local_search(pomp_mdl, params, ptb, fn, 126842004, detectCores())
 ```
@@ -198,9 +198,8 @@ time_record_df <- bind_rows(time_record_df, time_row)
 ```{r, fig.height = 3.5}
 mifs_local <- ls_obj$result
 
-mifs_local |> 
-  traces() |> 
-  melt() -> traces_df 
+traces_df <- mifs_local |> 
+  traces() |> melt()
 
 mif_traces(traces_df, names(par_obj$unknown), GBM_colour)
 ```
@@ -443,7 +442,7 @@ perturbations.
 
 ```{r}
 source("./R_scripts/likelihood_funs.R")
-zeta_ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, alpha = 0.02)
+zeta_ptb <- rw_sd(P_0 = ivp(0.02), tau = 0.02, alpha = 0.02)
 
 fn_ifp     <- file.path(folder, "ifp_zeta.rds" )
 
@@ -604,7 +603,7 @@ plot_guesses(guesses, 0.25, GBM_colour)
 
 ```{r}
 source("./R_scripts/likelihood_funs.R")
-P_0_ptb <- rw.sd(zeta = 0.02, tau = 0.02, alpha = 0.02)
+P_0_ptb <- rw_sd(zeta = 0.02, tau = 0.02, alpha = 0.02)
 
 fn_ifp     <- file.path(folder, "ifp_P_0.rds" )
 
@@ -753,7 +752,7 @@ plot_guesses(guesses, 0.25, GBM_colour)
 \hfill
 
 ```{r}
-alpha_ptb <- rw.sd(zeta = 0.02, tau = 0.02, P_0 = ivp(0.02))
+alpha_ptb <- rw_sd(zeta = 0.02, tau = 0.02, P_0 = ivp(0.02))
 
 fn_ifp     <- file.path(folder, "ifp_alpha.rds" )
 
@@ -907,7 +906,7 @@ plot_guesses(guesses, 0.25, GBM_colour)
 
 ```{r}
 source("./R_scripts/likelihood_funs.R")
-tau_ptb <- rw.sd(zeta = 0.02, alpha = 0.02, P_0 = ivp(0.02))
+tau_ptb <- rw_sd(zeta = 0.02, alpha = 0.02, P_0 = ivp(0.02))
 
 fn_ifp     <- file.path(folder, "ifp_tau.rds" )
 
@@ -1247,15 +1246,15 @@ plot_filt_dist_re(sample_list[[3]], actual_inc_df, GBM_colour) -> g3b
 
 
 ```{r, fig.height = 7, dev = 'cairo_pdf'}
-fig_path <- "./paper_plots/Fig_04_GBM.pdf"
+fig_path <- "./paper_plots/Fig_04_GBM_thesis.pdf"
 
 ggsave(fig_path, 
        plot = (g1 | g1b) / (g2 | g2b) / (g3 | g3b), dpi = "print",
-       height = 7, width = 5, device = cairo_pdf)
+       height = 6.5, width = 5, device = cairo_pdf)
 
-ggsave("./paper_plots/Fig_04_GBM.eps", 
+ggsave("./paper_plots/Fig_04_GBM_thesis.eps", 
        plot = (g1 | g1b) / (g2 | g2b) / (g3 | g3b),
-       height = 7, width = 5, device = cairo_ps)
+       height = 6.5, width = 5, device = cairo_ps)
 
 g1 / g2 / g3
 ```

@@ -105,7 +105,7 @@ summarise_hindcast <- function (var_name, filter_lik = FALSE) {
   if(!file.exists(summary_file)) {
     
     gc()
-    file_name <- str_glue("{folder}/{var_name}.rds")
+    file_name <- str_glue("{folder}/{var_name}_thesis.rds")
     df <- readRDS(file_name)
     
     if(filter_lik) {
@@ -132,7 +132,7 @@ sample_filt_dist <- function(var_input, folder, seed_val, filter_lik = FALSE) {
   
   set.seed(seed_val)
   
-  fn_var <- file.path(folder, str_glue("{var_input}.rds"))
+  fn_var <- file.path(folder, str_glue("{var_input}_thesis.rds"))
   
   var_df <- readRDS(fn_var)
   
@@ -142,7 +142,7 @@ sample_filt_dist <- function(var_input, folder, seed_val, filter_lik = FALSE) {
     
   var_df <- var_df |> mutate(weight = exp(loglik - mean(loglik)))
   
-  map_df(seq(7, 77, 7), function(i){
+  map_df(1:11, function(i) {
     
     time_df <- filter(var_df, time == i) |>  
       mutate(rel_weight = weight / sum(weight))
@@ -152,6 +152,6 @@ sample_filt_dist <- function(var_input, folder, seed_val, filter_lik = FALSE) {
     gc()
     
     data.frame(time = i, value = samples)
-  }) |>  mutate(week = time / 7)
+  }) |>  mutate(week = time)
 }
   

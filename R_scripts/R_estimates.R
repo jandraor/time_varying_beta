@@ -5,7 +5,7 @@ estimate_r <- function(beta_t, omega = 0.73, gamma = 1/2.9, eta = 1 / 2.1,
   symp_cont  <- omega * beta_t / gamma
   
   # Pre-symptomatic contribution to R
-  psymp_cont <- beta_t / eta
+  psymp_cont <- omega * beta_t / eta
   
   # Asymptomatic contribution to R
   asymp_cont <- (1 - omega) * beta_t * mu / kappa

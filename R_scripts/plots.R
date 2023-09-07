@@ -213,8 +213,8 @@ plot_daily_data <- function(irish_data, drv_df) {
 
 loglik_traces <- function(traces_df, lims, traces_col) {
   
-  traces_df %>% filter(variable == "loglik") %>% 
-    ggplot(aes(x = iteration,y = value,group = L1))+
+  traces_df |>  filter(variable == "loglik") |> 
+    ggplot(aes(x = as.numeric(iteration), y = value, group = .L1))+
     geom_line(colour = traces_col, alpha = 0.25)+
     scale_y_continuous(limits = lims) +
     guides(color = "none") +
@@ -234,9 +234,11 @@ loglik_se_sens <- function(sens_results, DGP_colour) {
 }
 
 mif_traces <- function(traces_df, unknown_pars, traces_col) {
-  traces_df %>% 
-    filter(variable %in% c("loglik", unknown_pars)) %>%
-    ggplot(aes(x= iteration,y = value, group = L1))+
+  
+  traces_df |> 
+    filter(variable %in% c("loglik", unknown_pars)) |> 
+    mutate(variable = ifelse(variable == "P_0", "P[0]", variable)) |> 
+    ggplot(aes(x = as.numeric(iteration), y = value, group = .L1)) +
     geom_line(color = traces_col, alpha = 0.25) +
     theme_pubr() +
     scale_y_continuous(labels = comma) +

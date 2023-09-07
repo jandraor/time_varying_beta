@@ -77,11 +77,12 @@ plot_filt_dist_re <- function(samples_df, wkl_inc, dist_col) {
     facet_wrap(~ as.factor(week), scales = "free") +
     geom_hline(data = wkl_inc, aes(x = as.factor(week)), yintercept = 1,
                linetype = "dashed", colour = ET_colour) +
+    scale_y_continuous(n.breaks = 4) +
     theme_classic() +
     labs(x = "Week", y = parse(text = "\u211c[t]")) +
     theme(strip.background = element_blank(),
           strip.text.x = element_blank(),
-          axis.text.y  = element_text(size = 4),
+          axis.text.y  = element_text(size = 5),
           axis.line  = element_line(colour = "grey60", size = 0.2),
           axis.ticks = element_line(colour = "grey60", size = 0.2),
           axis.title = element_text(size = 8, colour = "grey40"),
@@ -110,16 +111,17 @@ plot_daily_re <- function(re_df, pred_colour, plot_title) {
 
 plot_filt_dist <- function(samples_df, wkl_data, y_label, dist_col) {
   
-  ggplot(samples_df, aes(x = as.factor(week), y = value, group = week)) +
+  ggplot(samples_df, aes(x = as.factor(week), y = value)) +
     geom_violin(colour = dist_col) +
-    facet_wrap(~time, scales = "free") +
+    facet_wrap(~as.factor(week), scales = "free") +
     geom_hline(data = wkl_data, aes(x = as.factor(week), yintercept = y), 
                linetype = "dotted", colour = data_colour) +
+    scale_y_continuous(n.breaks = 4) +
     theme_classic() +
     labs(x = "Week", y = parse(text = y_label)) +
     theme(strip.background = element_blank(),
           strip.text.x = element_blank(),
-          axis.text.y  = element_text(size = 4),
+          axis.text.y  = element_text(size = 5),
           axis.line  = element_line(colour = "grey60", size = 0.2),
           axis.ticks = element_line(colour = "grey60", size = 0.2),
           axis.title = element_text(size = 8, colour = "grey40"),

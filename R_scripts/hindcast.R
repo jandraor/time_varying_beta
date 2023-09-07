@@ -4,7 +4,7 @@ hindcast <- function(unk_pars_df, pomp_mdl, fixed_pars, folder, seed,
   hc_vars <- c("C", "Z", "Re")
   
   sapply(hc_vars, function(hc_var) {
-    filename <- str_glue("{folder}/{hc_var}.rds")
+    filename <- str_glue("{folder}/{hc_var}_thesis.rds")
     file.exists(filename)
   }) |> sum() -> flnm_vals 
   
@@ -37,7 +37,7 @@ hindcast <- function(unk_pars_df, pomp_mdl, fixed_pars, folder, seed,
       pf <- pfilter(pomp_mdl, params = c(fixed_pars, unlist(unk_pars)),
                     Np = 1e4, save.states = TRUE)
       
-      ss <- saved.states(pf)
+      ss <- saved_states(pf)
       
       id <- as.numeric(rownames(unk_pars))
       
@@ -80,7 +80,7 @@ hindcast <- function(unk_pars_df, pomp_mdl, fixed_pars, folder, seed,
         df        <- readRDS(iter_file) |> filter(var == hc_var)
       })
       
-      saveRDS(var_df, str_glue("{folder}/{hc_var}.rds"))
+      saveRDS(var_df, str_glue("{folder}/{hc_var}_thesis.rds"))
     })
     
     walk(1:n_iters, function(id) unlink(str_glue("{folder}/hc_iter_{id}.rds")))
