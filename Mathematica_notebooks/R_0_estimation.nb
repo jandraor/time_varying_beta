@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[      4579,        150]
-NotebookOptionsPosition[      4031,        132]
-NotebookOutlinePosition[      4404,        148]
-CellTagsIndexPosition[      4361,        145]
+NotebookDataLength[      4835,        156]
+NotebookOptionsPosition[      4234,        137]
+NotebookOutlinePosition[      4660,        154]
+CellTagsIndexPosition[      4617,        151]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -51,7 +51,8 @@ Cell[BoxData[{
    RowBox[{"V", "[", 
     RowBox[{"[", 
      RowBox[{"2", ",", "1"}], "]"}], "]"}], " ", "=", " ", 
-   RowBox[{"-", "\[Sigma]"}]}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"-", "\[Omega]"}], "*", "\[Sigma]"}]}], ";"}], "\n", 
  RowBox[{
   RowBox[{
    RowBox[{"V", "[", 
@@ -63,8 +64,7 @@ Cell[BoxData[{
    RowBox[{"V", "[", 
     RowBox[{"[", 
      RowBox[{"3", ",", "2"}], "]"}], "]"}], " ", "=", " ", 
-   RowBox[{
-    RowBox[{"-", "\[Omega]"}], "*", "\[Eta]"}]}], ";"}], "\n", 
+   RowBox[{"-", "\[Eta]"}]}], ";"}], "\n", 
  RowBox[{
   RowBox[{
    RowBox[{"V", "[", 
@@ -75,11 +75,11 @@ Cell[BoxData[{
   RowBox[{
    RowBox[{"V", "[", 
     RowBox[{"[", 
-     RowBox[{"4", ",", "2"}], "]"}], "]"}], " ", "=", " ", 
+     RowBox[{"4", ",", "1"}], "]"}], "]"}], " ", "=", " ", 
    RowBox[{
     RowBox[{"-", 
      RowBox[{"(", 
-      RowBox[{"1", "-", " ", "\[Omega]"}], ")"}]}], "*", " ", "\[Eta]"}]}], 
+      RowBox[{"1", "-", " ", "\[Omega]"}], ")"}]}], "*", " ", "\[Sigma]"}]}], 
   ";"}], "\n", 
  RowBox[{
   RowBox[{
@@ -103,38 +103,44 @@ Cell[BoxData[{
  CellChangeTimes->{{3.8268272401682386`*^9, 3.8268272780178456`*^9}, 
    3.8268273461158085`*^9, {3.8268280038374662`*^9, 3.8268280423909855`*^9}, {
    3.8268280763582745`*^9, 3.8268281848168926`*^9}, {3.8268282400107183`*^9, 
-   3.826828240492242*^9}, {3.826830652700206*^9, 3.8268306858746624`*^9}},
- CellLabel->
-  "In[103]:=",ExpressionUUID->"661e64c7-2593-472a-8d4c-ac694dc64fc9"],
+   3.826828240492242*^9}, {3.826830652700206*^9, 3.8268306858746624`*^9}, {
+   3.903090779352306*^9, 3.90309079431148*^9}, {3.9030908275681*^9, 
+   3.9030908385725737`*^9}},
+ CellLabel->"In[16]:=",ExpressionUUID->"661e64c7-2593-472a-8d4c-ac694dc64fc9"],
 
 Cell[BoxData[
  RowBox[{"\[Beta]", " ", 
   RowBox[{"(", 
    RowBox[{
-    FractionBox["1", "\[Eta]"], "+", 
-    FractionBox["\[Mu]", "\[Kappa]"], "+", 
-    FractionBox["\[Omega]", "\[Gamma]"], "-", 
+    RowBox[{
+     RowBox[{"(", 
+      RowBox[{
+       FractionBox["1", "\[Gamma]"], "+", 
+       FractionBox["1", "\[Eta]"]}], ")"}], " ", "\[Omega]"}], "+", 
     FractionBox[
-     RowBox[{"\[Mu]", " ", "\[Omega]"}], "\[Kappa]"]}], ")"}]}]], "Print",
- CellChangeTimes->{{3.8268306668903856`*^9, 3.826830693167346*^9}},
+     RowBox[{"\[Mu]", "-", 
+      RowBox[{"\[Mu]", " ", "\[Omega]"}]}], "\[Kappa]"]}], ")"}]}]], "Print",
+ CellChangeTimes->{{3.8268306668903856`*^9, 3.826830693167346*^9}, 
+   3.903090846589148*^9},
  CellLabel->
   "During evaluation of \
-In[103]:=",ExpressionUUID->"71cb7f27-d443-49a8-93c0-8ead16eecc46"],
+In[16]:=",ExpressionUUID->"7098b4f3-1575-45d2-adb9-99d5a10d5216"],
 
 Cell["\<\
-\\beta  \\left(\\frac{\\omega }{\\gamma }+\\frac{1}{\\eta }-\\frac{\\mu 
-   \\omega }{\\kappa }+\\frac{\\mu }{\\kappa }\\right)\
+\\beta  \\left(\\omega  \\left(\\frac{1}{\\gamma }+\\frac{1}{\\eta
+   }\\right)+\\frac{\\mu -\\mu  \\omega }{\\kappa }\\right)\
 \>", "Output",
- CellChangeTimes->{3.82683069323682*^9},
+ CellChangeTimes->{3.82683069323682*^9, 3.903090846593892*^9},
  CellLabel->
-  "Out[116]//TeXForm=",ExpressionUUID->"5acfc528-b545-4aeb-b212-fc0acd9119ae"]
+  "Out[29]//TeXForm=",ExpressionUUID->"ce0eb1d3-3579-422b-9b42-5bcef6b74842"]
 }, Open  ]]
 },
 WindowSize->{1536, 781},
-WindowMargins->{{-8, Automatic}, {Automatic, -8}},
+WindowMargins->{{501, Automatic}, {112, Automatic}},
 Magnification:>1.7 Inherited,
-FrontEndVersion->"12.0 for Microsoft Windows (64-bit) (April 8, 2019)",
-StyleDefinitions->"Default.nb"
+FrontEndVersion->"12.1 for Mac OS X x86 (64-bit) (June 19, 2020)",
+StyleDefinitions->"Default.nb",
+ExpressionUUID->"5b51510a-63c7-470f-b120-a39914939f52"
 ]
 (* End of Notebook Content *)
 
@@ -148,9 +154,9 @@ CellTagsIndex->{}
 (*NotebookFileOutline
 Notebook[{
 Cell[CellGroupData[{
-Cell[580, 22, 2681, 85, 479, "Input",ExpressionUUID->"661e64c7-2593-472a-8d4c-ac694dc64fc9"],
-Cell[3264, 109, 462, 12, 63, "Print",ExpressionUUID->"71cb7f27-d443-49a8-93c0-8ead16eecc46"],
-Cell[3729, 123, 286, 6, 104, "Output",ExpressionUUID->"5acfc528-b545-4aeb-b212-fc0acd9119ae"]
+Cell[580, 22, 2778, 86, 507, "Input",ExpressionUUID->"661e64c7-2593-472a-8d4c-ac694dc64fc9"],
+Cell[3361, 110, 548, 16, 62, "Print",ExpressionUUID->"7098b4f3-1575-45d2-adb9-99d5a10d5216"],
+Cell[3912, 128, 306, 6, 108, "Output",ExpressionUUID->"ce0eb1d3-3579-422b-9b42-5bcef6b74842"]
 }, Open  ]]
 }
 ]

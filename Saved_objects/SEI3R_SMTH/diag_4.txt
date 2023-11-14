@@ -1,9 +1,7 @@
-Processing csv files: /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpSSDDtw/SEI3R_4_smth-202108101956-1-01bd1a.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpSSDDtw/SEI3R_4_smth-202108101956-2-01bd1a.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpSSDDtw/SEI3R_4_smth-202108101956-3-01bd1a.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/RtmpSSDDtw/SEI3R_4_smth-202108101956-4-01bd1a.csv
+Processing csv files: /var/folders/51/j15clly97bl0z25f9q1s9hdm0000gn/T/RtmpdONYvA/SEI3R_4_smth-202309151148-1-23bcec.csv, /var/folders/51/j15clly97bl0z25f9q1s9hdm0000gn/T/RtmpdONYvA/SEI3R_4_smth-202309151148-2-23bcec.csv, /var/folders/51/j15clly97bl0z25f9q1s9hdm0000gn/T/RtmpdONYvA/SEI3R_4_smth-202309151148-3-23bcec.csv, /var/folders/51/j15clly97bl0z25f9q1s9hdm0000gn/T/RtmpdONYvA/SEI3R_4_smth-202309151148-4-23bcec.csv
 
 Checking sampler transitions treedepth.
-469 of 8000 (5.9%) transitions hit the maximum treedepth limit of 10, or 2^10 leapfrog steps.
-Trajectories that are prematurely terminated due to this limit will result in slow exploration.
-For optimal performance, increase this limit.
+Treedepth satisfactory for all transitions.
 
 Checking sampler transitions for divergences.
 No divergent transitions found.
@@ -15,5 +13,5 @@ Effective sample size satisfactory.
 
 Split R-hat values satisfactory all parameters.
 
-Processing complete.
+Processing complete, no problems detected.
 

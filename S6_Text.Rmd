@@ -180,7 +180,7 @@ Maximum Likelihood Estimate (MLE) via Iterated Filtering. We repeat this process
 
 ```{r}
 source("./R_scripts/local_search.R")
-ptb    <- rw.sd(P_0 = ivp(0.02), tau = 0.02, nu = 0.02, upsilon = 0.02, 
+ptb    <- rw_sd(P_0 = ivp(0.02), tau = 0.02, nu = 0.02, upsilon = 0.02, 
                 zeta = 0.02, alpha = 0.02)
 
 fn     <- file.path(folder, "local_search.rds")
@@ -429,7 +429,7 @@ plot_guesses(guesses, 0.25, CIR_colour) +
 \hfill
 
 ```{r}
-ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, alpha = 0.02, nu = 0.02,
+ptb <- rw_sd(P_0 = ivp(0.02), tau = 0.02, alpha = 0.02, nu = 0.02,
              upsilon = 0.02)
 
 fn      <- file.path(folder, "ifp_zeta.rds")
@@ -587,7 +587,7 @@ profile_design(
 
 ```{r}
 source("./R_scripts/likelihood_funs.R")
-P_0_ptb <- rw.sd(zeta = 0.02, tau = 0.02, alpha = 0.02, nu = 0.02,
+P_0_ptb <- rw_sd(zeta = 0.02, tau = 0.02, alpha = 0.02, nu = 0.02,
                  upsilon = 0.02)
 
 var_name <- "P_0"
@@ -743,7 +743,7 @@ profile_design(
 <!-- \hfill -->
 
 ```{r}
-ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, nu = 0.02,
+ptb <- rw_sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, nu = 0.02,
              upsilon = 0.02)
 
 fn      <- file.path(folder, "ifp_alpha.rds")
@@ -899,7 +899,7 @@ profile_design(
 <!-- \hfill -->
 
 ```{r}
-ptb <- rw.sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, nu = 0.02,
+ptb <- rw_sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, nu = 0.02,
              upsilon = 0.02)
 
 fn      <- file.path(folder, "ifp_tau.rds")
@@ -1054,7 +1054,7 @@ profile_design(
 <!-- \hfill -->
 
 ```{r}
-ptb <- rw.sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, tau = 0.02,
+ptb <- rw_sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, tau = 0.02,
              upsilon = 0.02)
 
 fn      <- file.path(folder, "ifp_nu.rds")
@@ -1208,7 +1208,7 @@ profile_design(
 <!-- \hfill -->
 
 ```{r}
-ptb <- rw.sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, tau = 0.02,
+ptb <- rw_sd(P_0 = ivp(0.02), alpha = 0.02, zeta = 0.02, tau = 0.02,
              nu = 0.02)
 
 fn      <- file.path(folder, "ifp_upsilon.rds")
@@ -1515,6 +1515,7 @@ myMvd <- mvdc(copula = myCop, margins = rep("unif", n_unk),
 
 params           <- rMvdc(200, myMvd) |>  data.frame()
 colnames(params) <- colnames(unk_par_MLE)
+write_csv(params, file.path(folder, "params.csv"))
 
 plot(params, labels_CIR[-1], col = CIR_colour)
 ```
@@ -1692,13 +1693,13 @@ plot_filt_dist_re(sample_list[[3]], actual_inc_df, CIR_colour) -> g3b
 
 
 ```{r, fig.height = 7, dev = 'cairo_pdf'}
-fig_path <- "./paper_plots/Fig_05_CIR.pdf"
+fig_path <- "./paper_plots/Fig_05_CIR_thesis.pdf"
 
 ggsave(fig_path, 
        plot = (g1 | g1b) / (g2 | g2b) / (g3 | g3b), dpi = "print",
-       height = 7, width = 5, device = cairo_pdf)
+       height = 6.5, width = 5, device = cairo_pdf)
 
-ggsave("./paper_plots/Fig_05_CIR.eps", 
+ggsave("./paper_plots/Fig_05_CIR_thesis.eps", 
        plot = (g1 | g1b) / (g2 | g2b) / (g3 | g3b),
        height = 7, width = 5, device = cairo_ps)
 

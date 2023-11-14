@@ -1,79 +1,81 @@
 functions {
-  vector SEI3R(real time, vector y, real[] params) {
+  vector X_model(real time, vector y, array[] real params) {
     vector[8] dydt;
     real E_to_P;
-    real P_to_A;
+    real E_to_A;
     real P_to_I;
     real A_to_R;
     real I_to_R;
     real lambda;
-    real adjust_Z;
+    real inv_nu;
     real P_to_C;
     real S_to_E;
-    E_to_P = 0.3333333333*y[3];
-    P_to_A = (1-0.73)*0.4761904762*y[4];
-    P_to_I = 0.73*0.4761904762*y[4];
+    real adjust_Z;
+    E_to_P = 0.73*0.3333333333*y[3];
+    E_to_A = (1-0.73)*0.3333333333*y[3];
+    P_to_I = 0.4761904762*y[4];
     A_to_R = 0.2*y[7];
     I_to_R = 0.3448275862*y[5];
     lambda = (params[1]*y[1]/4937796)*(y[5]+y[4]+0.5*y[7]);
-    adjust_Z = (params[3]-y[1])/params[2];
+    inv_nu = 1/params[3];
     P_to_C = P_to_I;
     S_to_E = lambda*y[2];
+    adjust_Z = (params[2]-y[1])/inv_nu;
     dydt[1] = adjust_Z;
     dydt[2] = -S_to_E;
-    dydt[3] = S_to_E-E_to_P;
-    dydt[4] = E_to_P-P_to_A-P_to_I;
+    dydt[3] = S_to_E-E_to_P-E_to_A;
+    dydt[4] = E_to_P-P_to_I;
     dydt[5] = P_to_I-I_to_R;
     dydt[6] = A_to_R+I_to_R;
-    dydt[7] = P_to_A-A_to_R;
+    dydt[7] = E_to_A-A_to_R;
     dydt[8] = P_to_C;
     return dydt;
   }
 }
 data {
   int<lower = 1> n_obs;
-  int<lower = 1> n_params;
-  int<lower = 1> n_difeq;
-  int y1[n_obs];
+  array[n_obs] int y1;
   real t0;
-  real ts[n_obs];
+  array[n_obs] real ts;
 }
 parameters {
-  real<lower = 0>            zeta;
-  real<lower = 0, upper = 1> nu;
+  real<lower = 0> zeta;
   real<lower = 0, upper = 1> upsilon;
-  real<lower = 0>            P_0;
+  real<lower = 0, upper = 1> nu;
+  real<lower = 0> P0;
 }
 transformed parameters{
-  vector[n_difeq] o[n_obs]; // Output from the ODE solver
-  real y1_hat[n_obs];
-  vector[n_difeq] y0;
-  real params[n_params];
-  y0[1] = 1;
-  y0[2] = 4937794 - P_0;
-  y0[3] = 0;
-  y0[4] = P_0;
-  y0[5] = 0;
-  y0[6] = 0;
-  y0[7] = 0;
-  y0[8] = 0;
+  array[n_obs] vector[8] x; // Output from the ODE solver
+  array[3] real params;
+  vector[8] x0; // init values
+  array[n_obs] real delta_x_1;
+  x0[1] = 1; // Z
+  x0[2] = (4937796) - P0; // S
+  x0[3] = 0; // E
+  x0[4] = P0; // P
+  x0[5] = 0; // I
+  x0[6] = 0; // R
+  x0[7] = 0; // A
+  x0[8] = 0; // C
   params[1] = zeta;
-  params[2] = 1 / nu;
-  params[3] = upsilon;
-  o = ode_rk45(SEI3R, y0, t0, ts, params);
-  y1_hat[1] =  o[1, 8]  - y0[8];
+  params[2] = upsilon;
+  params[3] = nu;
+  x = ode_rk45(X_model, x0, t0, ts, params);
+  delta_x_1[1] =  x[1, 8] - x0[8] + 1e-5;
   for (i in 1:n_obs-1) {
-    y1_hat[i + 1] = o[i + 1, 8] - o[i, 8] + 1e-4;
+    delta_x_1[i + 1] = x[i + 1, 8] - x[i, 8] + 1e-5;
   }
 }
 model {
-  zeta    ~ lognormal(0, 1);
+  zeta ~ lognormal(0, 1);
   upsilon ~ beta(2, 2);
-  nu      ~ beta(2, 2);
-  P_0     ~ lognormal(0, 1);
-  y1      ~ poisson(y1_hat);
+  nu ~ beta(2, 2);
+  P0 ~ lognormal(0, 1);
+  y1 ~ poisson(delta_x_1);
 }
 generated quantities {
   real log_lik;
-  log_lik = poisson_lpmf(y1 | y1_hat);
+  array[n_obs] int sim_y1;
+  log_lik = poisson_lpmf(y1 | delta_x_1);
+  sim_y1 = poisson_rng(delta_x_1);
 }

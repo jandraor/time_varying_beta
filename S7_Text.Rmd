@@ -34,7 +34,6 @@ library(readr)
 library(readsdr)
 library(readxl)
 library(reshape2)
-library(rstan)
 library(stringr)
 library(tictoc)
 library(tidyr)
@@ -140,7 +139,7 @@ plot_priors()
 source("./R_scripts/stan_utils.R")
 source("./R_scripts/write_SEI3R_model.R")
 n_orders            <- 9
-pars                <- c("zeta", "nu", "upsilon", "P_0")
+pars                <- c("zeta", "nu", "upsilon", "P0")
 posterior_list      <- vector("list", n_orders)
 sim_incidences_list <- vector("list", n_orders)
 Z_list              <- vector("list", n_orders)
@@ -152,14 +151,21 @@ time_list_nb        <- vector("list", n_orders)
 ## Sampling
 
 ```{r}
-stan_d <- list(n_obs    = nrow(obs_df),
-               y1       = obs_df$y1,
-               n_params = 3,
-               n_difeq  = NA,
-               t0       = 0,
-               ts       = 1:nrow(obs_df))
-```
+meas_mdl   <- list("y1 ~ poisson(net_flow(C))")
 
+est_params <- list(sd_prior("zeta", "lognormal", c(0, 1)),
+                   sd_prior("upsilon", "beta", c(2, 2)),
+                   sd_prior("nu", "beta", c(2, 2)),
+                   sd_prior("P0", "lognormal", c(0, 1), "init"))
+
+walk(1:n_orders, \(dly_o) {
+  
+  mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
+  stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+  stan_file <- sd_Bayes(mdl_path, meas_mdl, est_params)
+  write_file(stan_file, stan_path)
+})
+```
 
 For validation purposes, we show the results from the sampling algorithm (HMC)
 by means of trace plots. These visualisation tools are time-series of the draws
@@ -173,369 +179,78 @@ chains converged to the posterior distribution.
 
 ### 1st order delay
 
-```{r}
-dly_o <- 1 # delay order
+```{r, message = TRUE}
+stan_d <- list(n_obs = nrow(obs_df),
+               y1    = obs_df$y1,
+               t0    = 0,
+               ts    = 1:nrow(obs_df))
 
-mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-mdl       <- read_xmile(mdl_path)
-stocks    <- sd_stocks(mdl)
-stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
-write_SEI3R_model(mdl_path, stan_path)
-```
+ad_list <- c(0.90, list(NULL), 0.95, list(NULL), list(NULL), list(NULL), 0.95,
+             0.95, 0.95)
 
-```{r fit_SMTH_1}
-stan_d <- nrow(stocks)
+sz_list <- c(0.0001, list(NULL), 0.0001, 0.001, list(NULL), list(NULL), 0.00001, 
+             0.0001, 0.0001)
 
-fit_options <- list(stan_d      = stan_d,
-                    seed        = 931918239,
-                    warmup      = 4000,
-                    sampling    = 2000,
-                    adapt_delta = 0.90,
-                    step_size   = 0.0001) # default
+mt_list <- c(11, list(NULL), 11, rep(list(NULL), 3), 12, 12, 12)
 
-results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
-time_list[[dly_o]] <- calculate_time(results$time)
-sf                 <- results$sf
+result_list <- run_stan_files(9, stan_d, folder, ad_list, sz_list, mt_list)
 ```
 
 ```{r, fig.height = 3.5}
-plot_traces(sf, pars)
+plot_traces(result_list[[1]]$sf, pars)
 ```
 
-```{r}
-posterior_df                 <- as.data.frame(sf)
-posterior_list[[dly_o]]      <- posterior_df
-sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
-Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
-                                                         stocks, "o")
-ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
-```
+
 
 ### 2nd order delay
 
-```{r}
-dly_o <- 2 # delay order
-
-mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-mdl       <- read_xmile(mdl_path)
-stocks    <- sd_stocks(mdl)
-stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
-write_SEI3R_model(mdl_path, stan_path)
-```
-
-```{r fit_SMTH_2}
-stan_d <- nrow(stocks)
-
-fit_options <- list(stan_d      = stan_d,
-                    seed        = 693132317,
-                    warmup      = 2000,
-                    sampling    = 2000,
-                    adapt_delta = 0.95, # default
-                    step_size   = 0.0001) 
-
-results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
-time_list[[dly_o]] <- calculate_time(results$time)
-sf                 <- results$sf
-```
 
 ```{r, fig.height = 3.5}
-plot_traces(sf, pars)
-```
-
-```{r}
-posterior_df                 <- as.data.frame(sf)
-posterior_list[[dly_o]]      <- posterior_df
-sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
-Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
-                                                         stocks, "o")
-ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+plot_traces(result_list[[2]]$sf, pars)
 ```
 
 ### 3rd order delay
 
-```{r}
-dly_o <- 3 # delay order
-
-mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-mdl       <- read_xmile(mdl_path)
-stocks    <- sd_stocks(mdl)
-stan_path <- "./Stan_files/SEI3R_3_smth.stan"
-write_SEI3R_model(mdl_path, stan_path)
-```
-
-```{r fit_SMTH_3}
-stan_d <- nrow(stocks)
-
-fit_options <- list(stan_d      = stan_d,
-                    seed        = 477626707,
-                    warmup      = 2000,
-                    sampling    = 2000,
-                    step_size   = 0.0001,
-                    adapt_delta = 0.95) # default
-
-results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
-time_list[[dly_o]] <- calculate_time(results$time)
-sf                 <- results$sf
-```
 
 ```{r, fig.height = 3.5}
-plot_traces(sf, pars)
+plot_traces(result_list[[3]]$sf, pars)
 ```
-
-```{r}
-posterior_df                 <- as.data.frame(sf)
-posterior_list[[dly_o]]      <- posterior_df
-sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
-Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
-                                                         stocks, "o")
-ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
-```
-
 
 ### 4th order delay
 
-```{r}
-dly_o <- 4 # delay order
-
-mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-mdl       <- read_xmile(mdl_path)
-stocks    <- sd_stocks(mdl)
-stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
-write_SEI3R_model(mdl_path, stan_path)
-```
-
-```{r fit_SMTH_4}
-stan_d <- nrow(stocks)
-
-fit_options <- list(stan_d      = stan_d,
-                    seed        = 986614638,
-                    warmup      = 2000,
-                    sampling    = 2000,
-                    step_size   = 0.001,
-                    adapt_delta = 0.8) # default
-
-results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
-time_list[[dly_o]] <- calculate_time(results$time)
-sf                 <- results$sf
-```
-
 ```{r, fig.height = 3.5}
-plot_traces(sf, pars)
+plot_traces(result_list[[4]]$sf, pars)
 ```
-
-```{r}
-posterior_df                 <- as.data.frame(sf)
-posterior_list[[dly_o]]      <- posterior_df
-sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
-Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
-                                                         stocks, "o")
-ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
-```
-
 
 ### 5th order delay
 
-```{r}
-dly_o <- 5 # delay order
-
-mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-mdl       <- read_xmile(mdl_path)
-stocks    <- sd_stocks(mdl)
-stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
-write_SEI3R_model(mdl_path, stan_path)
-```
-
-```{r fit_SMTH_5}
-stan_d <- nrow(stocks)
-
-fit_options <- list(stan_d      = stan_d,
-                    seed        = 549943389,
-                    warmup      = 2000,
-                    sampling    = 2000,
-                    step_size   = 0.001,
-                    adapt_delta = 0.8) # default
-
-results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
-time_list[[dly_o]] <- calculate_time(results$time)
-sf                 <- results$sf
-```
-
 ```{r, fig.height = 3.5}
-plot_traces(sf, pars)
+plot_traces(result_list[[5]]$sf, pars)
 ```
-
-```{r}
-posterior_df                 <- as.data.frame(sf)
-posterior_list[[dly_o]]      <- posterior_df
-sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
-Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
-                                                         stocks, "o")
-S_df                         <- extract_timeseries_stock("S", posterior_df,
-                                                         stocks, "o")
-ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
-```
-
 
 ### 6th order delay
 
-```{r}
-dly_o <- 6 # delay order
-
-mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-mdl       <- read_xmile(mdl_path)
-stocks    <- sd_stocks(mdl)
-stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
-write_SEI3R_model(mdl_path, stan_path)
-```
-
-```{r fit_SMTH_6}
-stan_d <- nrow(stocks)
-
-fit_options <- list(stan_d      = stan_d,
-                    seed        = 846206826,
-                    warmup      = 2000,
-                    sampling    = 2000,
-                    adapt_delta = 0.90, # default
-                    step_size   = 0.001) 
-
-results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
-time_list[[dly_o]] <- calculate_time(results$time)
-sf                 <- results$sf
-```
-
 ```{r, fig.height = 3.5}
-plot_traces(sf, pars)
-```
-
-```{r}
-posterior_df                 <- as.data.frame(sf)
-posterior_list[[dly_o]]      <- posterior_df
-sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
-Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
-                                                         stocks, "o")
-ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+plot_traces(result_list[[6]]$sf, pars)
 ```
 
 ### 7th order delay
 
-```{r}
-dly_o <- 7 # delay order
-
-mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-mdl       <- read_xmile(mdl_path)
-stocks    <- sd_stocks(mdl)
-stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
-write_SEI3R_model(mdl_path, stan_path)
-```
-
-```{r fit_SMTH_7}
-stan_d <- nrow(stocks)
-
-fit_options <- list(stan_d      = stan_d,
-                    seed        = 373573480,
-                    warmup      = 2000,
-                    sampling    = 2000,
-                    adapt_delta = 0.95, # default
-                    step_size   = 0.0001) 
-
-results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
-time_list[[dly_o]] <- calculate_time(results$time)
-sf                 <- results$sf
-```
-
 ```{r, fig.height = 3.5}
-plot_traces(sf, pars)
-```
-
-```{r}
-posterior_df                 <- as.data.frame(sf)
-posterior_list[[dly_o]]      <- posterior_df
-sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
-Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
-                                                         stocks, "o")
-ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+plot_traces(result_list[[7]]$sf, pars)
 ```
 
 ### 8th order delay
 
-```{r}
-dly_o <- 8 # delay order
-
-mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-mdl       <- read_xmile(mdl_path)
-stocks    <- sd_stocks(mdl)
-stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
-write_SEI3R_model(mdl_path, stan_path)
-```
-
-```{r fit_SMTH_8}
-stan_d <- nrow(stocks)
-
-fit_options <- list(stan_d      = stan_d,
-                    seed        = 107900538,
-                    warmup      = 4000,
-                    sampling    = 2000,
-                    adapt_delta = 0.80, # default
-                    step_size   = 0.001) 
-
-results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
-time_list[[dly_o]] <- calculate_time(results$time)
-sf                 <- results$sf
-```
-
 ```{r, fig.height = 3.5}
-plot_traces(sf, pars)
-```
-
-```{r}
-posterior_df                 <- as.data.frame(sf)
-posterior_list[[dly_o]]      <- posterior_df
-sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
-Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
-                                                         stocks, "o")
-ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
+plot_traces(result_list[[8]]$sf, pars)
 ```
 
 ### 9th order delay
 
-```{r}
-dly_o <- 9 # delay order
-
-mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-mdl       <- read_xmile(mdl_path)
-stocks    <- sd_stocks(mdl)
-stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
-write_SEI3R_model(mdl_path, stan_path)
-```
-
-```{r fit_SMTH_9}
-stan_d <- nrow(stocks)
-
-fit_options <- list(stan_d      = stan_d,
-                    seed        = 790975884,
-                    warmup      = 4000,
-                    sampling    = 2000,
-                    adapt_delta = 0.80, # default
-                    step_size   = 0.001) 
-
-results            <- run_stan_file(dly_o, fit_options, folder, stan_folder)
-time_list[[dly_o]] <- calculate_time(results$time)
-sf                 <- results$sf
-```
-
 ```{r, fig.height = 3.5}
-plot_traces(sf, pars)
+plot_traces(result_list[[9]]$sf, pars)
 ```
-
-```{r}
-posterior_df                 <- as.data.frame(sf)
-posterior_list[[dly_o]]      <- posterior_df
-sim_incidences_list[[dly_o]] <- construct_incidence_df(posterior_df, dly_o)
-Z_list[[dly_o]]              <- extract_timeseries_stock("Z", posterior_df,
-                                                         stocks, "o")
-ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
-```
-
 
 \newpage
 
@@ -546,6 +261,21 @@ ll_list[[dly_o]]             <- posterior_df |> select(log_lik)
 \hfill
 
 ```{r inc_fits_g, fig.height = 7}
+sim_incidences_list <- imap(result_list, \(obj, i){
+  construct_incidence_df(obj$sf, i)
+})
+
+Z_list <- imap(result_list, \(obj, i) {
+  
+  mdl    <- read_xmile(str_glue("./models/SEI3R_order_{i}.stmx"))
+  stocks <- sd_stocks(mdl)|> pull(name)
+  extract_timeseries_stock("Z", obj$sf, stocks, "x")
+})
+
+ll_list <- lapply(result_list, \(obj) obj$sf |> select(log_lik))
+
+posterior_list <- purrr::map(result_list, "sf")
+
 data_df <- rename(obs_df, y = y1)
 plot_daily_fit_by_order(sim_incidences_list, data_df, data_shape = 18, "C[t]")
 ```
@@ -726,7 +456,7 @@ high-density region of the parameter space.
 ```{r, fig.height = 5}
 imap_dfr(posterior_list, function(df, i) {
   
-  df |>  select(zeta, P_0, nu, upsilon) |> 
+  df |>  select(zeta, P0, nu, upsilon) |> 
     mutate(R_0 = estimate_r(zeta), iter = row_number(), order = i) |> 
     pivot_longer(c(-iter, -order))
 }) -> tidy_pars
@@ -751,7 +481,7 @@ summary_est <- pars_summary_pois |> mutate(value = str_glue("{mean} ({sd})")) |>
   
 kable_df <- summary_est
 
-kable_df <- kable_df[, c("order", "R_0", "zeta", "nu", "upsilon", "P_0")]
+kable_df <- kable_df[, c("order", "R_0", "zeta", "nu", "upsilon", "P0")]
 
 colnames(kable_df) <- c("Order", "R(0)", "$\\zeta$", "$\\nu$", "$\\upsilon$", "P(0)")
 
@@ -770,7 +500,12 @@ when the delay order is equal to **four**.
 # Computational time
 
 ```{r}
-imap_dfr(time_list, function(time_val, order) {
+time_list <- purrr::map(result_list, \(obj) obj$time[[1]])
+
+imap_dfr(time_list, function(time_obj, order) {
+  
+  time_val <- (time_obj$toc - time_obj$tic) / 60
+  print(time_val)
   data.frame(order = order, time = time_val)
 }) -> time_df
 
@@ -806,15 +541,23 @@ chains from different starting points.
 folder      <- "./Saved_objects/SEI3R_SMTH/neg_binom/bimodal/"
 stan_folder <- "./Stan_files/neg_binom/bimodal"
 
-walk(1:9, function(dly_o) {
-  stan_path <- str_glue("{stan_folder}/SEI3R_{dly_o}_smth.stan")
+meas_mdl <- list("y1 ~ neg_binomial_2(net_flow(C), phi)")
+
+est_params <- list(sd_prior("zeta", "lognormal", c(0, 1)),
+                   sd_prior("upsilon", "beta", c(2, 2)),
+                   sd_prior("nu", "beta", c(2, 2)),
+                   sd_prior("P0", "lognormal", c(0, 1), "init"))
+
+walk(1:n_orders, \(dly_o) {
+  
   mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-  write_SEI3R_model2(mdl_path, stan_path)
+  stan_path <- str_glue("{stan_folder}/SEI3R_{dly_o}_smth.stan")
+  stan_file <- sd_Bayes(mdl_path, meas_mdl, est_params)
+  write_file(stan_file, stan_path)
 })
 ```
 
 ```{r fit_SMTH_neg_binom}
-
 seeds <- c(270343005, 37169835, 416027131, 438666980, 305525729, 63772175,
            746136248, 344908351, 730557202)
 
@@ -883,7 +626,7 @@ row_samples <- sample.int(dim(demo_sf)[[1]], 250, replace = FALSE)
 demo_sf     <- demo_sf[row_samples,,]
 
 mcmc_trace_highlight(demo_sf , pars = c("zeta", "phi", "nu", "upsilon"), 
-                     highlight = 4, facet_args = list(labeller = label_parsed)) +
+                     highlight = 8, facet_args = list(labeller = label_parsed)) +
   theme(legend.position = "top")
 ```
 
@@ -897,7 +640,7 @@ mcmc_trace_highlight(demo_sf , pars = c("zeta", "phi", "nu", "upsilon"),
 Further, we consider posterior predictive checks as a more immediate appraisal. 
 That is, we compare the predicted incidence against the actual data, 
 discriminating by chain type. Here, it can be seen that, unlike the other 
-chains, samples from Chain 4 do not fit the data.
+chains, samples from Chain 8 do not fit the data.
 
 
 \hfill
@@ -905,7 +648,7 @@ chains, samples from Chain 4 do not fit the data.
 ```{r}
 posterior_df <- as.data.frame(map_list[[1]])
 sim_inc_df   <- construct_incidence_df(posterior_df, 1) |> 
-  mutate(fit = ifelse(iter >= 6001 & iter <= 8000, "no", "yes"))
+  mutate(fit = ifelse(iter >= 14001 & iter <= 16000, "no", "yes"))
 ```
 
 
@@ -916,7 +659,7 @@ plot_fit_by_chain_type(sim_inc_df, data_df, 1)
 ```
 
 ```{r}
-vars <- c("zeta", "nu", "upsilon", "phi", "P_0", "log_lik")
+vars <- c("zeta", "nu", "upsilon", "phi", "P0", "log_lik")
 
 summary_var <- imap_dfr(map_list, function(sf,i) {
   
@@ -1003,7 +746,7 @@ summary_var |> filter(var == "zeta") |>
 summary_var2 <- bind_rows(summary_var, R0_df)
 
 summary_var2 |> 
-  filter(converges == "yes", var %in% c("R_0", "zeta", "nu", "upsilon","P_0", "phi")) |> 
+  filter(converges == "yes", var %in% c("R_0", "zeta", "nu", "upsilon","P0", "phi")) |> 
   group_by(order, var) |> 
   summarise(mean = round(mean(value), 2),
             sd   = round(sd(value), 3)) |> 
@@ -1020,7 +763,7 @@ kable_df <- par_stats |>
   select(-mean, -sd) |> 
   pivot_wider(names_from = var, values_from = value)
 
-kable_df <- kable_df[, c("order", "R_0", "zeta", "nu", "upsilon", "P_0", "phi")]
+kable_df <- kable_df[, c("order", "R_0", "zeta", "nu", "upsilon", "P0", "phi")]
 
 colnames(kable_df) <- c("order", "R(0)", "$\\zeta$", "$\\nu$", "$\\upsilon$", "P(0)", "$\\phi$")
 
@@ -1037,7 +780,7 @@ contact rate.
 \hfill
 
 ```{r}
-map(map_list, function(sf) {
+purrr::map(map_list, function(sf) {
   posterior_df <- as.data.frame(sf) |> 
     mutate(converges = ifelse(log_lik < -480, "no", "yes")) |> 
     filter(converges == "yes")
@@ -1048,7 +791,7 @@ partial_Z_list <- imap(partial_posteriors, function(posterior_df, dly_o) {
   mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
   mdl       <- read_xmile(mdl_path)
   stocks    <- sd_stocks(mdl)
-  extract_timeseries_stock("Z", posterior_df, stocks, "o")
+  extract_timeseries_stock("Z", posterior_df, stocks, "x")
 })
 ```
 
@@ -1112,11 +855,11 @@ $\phi$ (see table below), leaving $\zeta$ as the only unknown. We also show
 $\zeta$ estimates from the well-behaved chains.
 
 ```{r}
-pars_subset <- c("nu", "phi", "upsilon", "zeta", "P_0")
+pars_subset <- c("nu", "phi", "upsilon", "zeta", "P0")
 
 subset_df   <- map_df(pars_subset, function(par){
   var_posterior <- extract_variable_matrix(map_list[[1]], par)
-  vals          <- var_posterior[, c(1:3, 5:8)] |> as.vector()
+  vals          <- var_posterior[, c(1:7)] |> as.vector()
   data.frame(par = par, val = vals)
 })
 
@@ -1146,36 +889,62 @@ zeta_val <- summary_subset |> filter(par == "zeta") |> pull(mean) |> round(2)
 ```{r}
 dly_o     <- 1 # delay order
 mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
-mdl       <- read_xmile(mdl_path)
+mdl       <- read_xmile(mdl_path, stock_list = list(S = 4937796 - 1,
+                                                    P = 1))
 stocks    <- sd_stocks(mdl)
 
 folder      <- "./Saved_objects/SEI3R_SMTH/neg_binom/zeta"
 stan_folder <- "./Stan_files/neg_binom/zeta"
-
 stan_path   <- str_glue("{stan_folder}/SEI3R_{dly_o}_smth.stan")
-write_SEI3R_model3(mdl_path, stan_path, 
-                   phi_val     = phi_val,
-                   upsilon_val = upsilon_val, 
-                   nu_val      = nu_val)
+
+meas_mdl <- list(str_glue("y1 ~ neg_binomial_2(net_flow(C), {phi_val})"))
+
+est_params <- list(sd_prior("zeta", "lognormal", c(0, 1)))
+
+stan_file <- sd_Bayes(mdl_path, 
+                      meas_mdl = meas_mdl, 
+                      estimated_params = est_params,
+                      const_list = list(nu          = nu_val,
+                                        upsilon = upsilon_val))
+write_file(stan_file, stan_path)
 ```
 
 ```{r fit_SMTH_1_neg_binom_zeta}
+fn <- file.path(folder, "sf_1.rds")
 
-stan_d <- list(n_obs  = nrow(obs_df),
-               y1       = obs_df$y1,
-               n_params = 3,
-               n_difeq  = nrow(stocks),
-               t0       = 0,
-               ts       = 1:nrow(obs_df))
+if(!file.exists(fn)) {
+  
+  mod           <- cmdstan_model(stan_path)
+  
+  stan_d <- list(n_obs  = nrow(obs_df),
+                 y1     = obs_df$y1,
+                 t0     = 0,
+                 ts     = 1:nrow(obs_df),
+                 x0     = stocks$init_value)
 
-fit_options <- list(stan_d      = stan_d,
-                    seed        = 270343005,
-                    warmup      = 2000,
-                    sampling    = 2000,
-                    chains      = 4)
+  
+  fit <- mod$sample(data          = stan_d,
+                    chains        = 4,
+                    parallel_chains = 4,
+                    iter_warmup     = 2000,
+                    iter_sampling   = 2000,
+                    refresh         = 100,
+                    save_warmup     = FALSE)
+  
+  diag_path <- file.path(folder , str_glue("diag_{dly_o}.txt"))
+  diagnosis <- fit$cmdstan_diagnose()
+  writeLines(diagnosis$stdout, diag_path)
+  
+  posterior_df <- as_draws_df(fit$draws())
+  
+  saveRDS(posterior_df, fn)
+  
+} else {
+  
+  posterior_df <- readRDS(fn)
+}
 
-results   <- run_stan_file(dly_o, fit_options, folder, stan_folder)
-zeta_sf   <- results$sf
+zeta_sf   <- posterior::as_draws_array(posterior_df)
 ```
 
 ### Trace plots 
@@ -1200,7 +969,7 @@ mcmc_trace(zeta_sf , pars = c("zeta", "log_lik"),
 
 After several attempts and strategies to find a robust model parameterisation 
 that achieves convergence, we identify that leaving $P_0$ and $\phi$ as 
-unknowns yield well-behaved chains, irrespectively of particular starting points
+unknowns yield well-behaved chains, irrespective of particular starting points
 and algorithm tuning. Nevertheless, this strategy assumes that $\zeta$, $\nu$ 
 and $\upsilon$ are known quantities, which we fix at the values found above
 (Section 4.1.3). In consequence, this can be seen as another exploratory 

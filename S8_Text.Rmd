@@ -69,7 +69,7 @@ lapply(ids, function(model_id) {
   
   folder       <- str_glue("./Saved_objects/SEI3R_GBM/mdl_{model_id}")
   summary_C    <- file.path(folder, "summary_C.rds") |> readRDS() |> 
-    mutate(model = model_id, week = time / 7)
+    mutate(model = model_id, week = time)
   
   plot_wkl_fit(summary_C, rename(data_list[[2]], y = y1), y_lab = "C[t]",
              shape = 18, plot_colour = GBM_colour, 
@@ -113,7 +113,7 @@ lapply(ids, function(model_id) {
   
   folder       <- str_glue("./Saved_objects/SEI3R_GBM/mdl_{model_id}")
   summary_Z    <- file.path(folder, "summary_Z.rds") |> readRDS() |> 
-    mutate(model = model_id, week = time / 7)
+    mutate(model = model_id, week = time)
   
   plot_wkl_fit(summary_Z, rename(data_list[[2]], y = y2), y_lab = "Z[t]",
              shape = 16, plot_colour = GBM_colour, 
@@ -150,7 +150,7 @@ lapply(ids, function(model_id) {
   
   folder       <- str_glue("./Saved_objects/SEI3R_GBM/mdl_{model_id}")
   summary_Re    <- file.path(folder, "summary_Re.rds") |> readRDS() |> 
-    mutate(model = model_id, week = time / 7)
+    mutate(model = model_id, week = time)
   
   plot_hidden_re(summary_Re, GBM_colour, paste0("Model ", model_id)) +
     scale_y_continuous(limits = c(0, 20))
@@ -232,6 +232,7 @@ set.seed(261483779)
 
 pomp::simulate(pomp_mdl, params = c(par_obj$fixed, mle_vector),
                        nsim = n_demo) |>  as.data.frame() |>  
+  rename(.id = .L1) |> 
   select(.id, time, Z) |>  
   mutate(beta = Z * mle_vector[["zeta"]],
          week = time / 7) |>  
@@ -270,6 +271,7 @@ set.seed(562808458)
 
 pomp::simulate(pomp_mdl, params = c(par_obj$fixed, mle_vector),
                        nsim = n_demo) |>  as.data.frame() |> 
+  rename(.id = .L1) |> 
   select(.id, time, Z) |> 
   mutate(beta = Z * mle_vector[["zeta"]],
          week = time / 7) |>  
@@ -306,7 +308,7 @@ DGP2 <- readRDS("./Saved_objects/SEI3R_CIR/mdl_12/summary_C.rds") |>
   mutate(DGP = "2")
 
 sim_C_df <- bind_rows(DGP1, DGP2) |> 
-  mutate(week = time / 7)
+  mutate(week = time)
 
 SMTH_obj <- readRDS("./Saved_objects/SEI3R_SMTH/predictions.rds")
 
@@ -328,7 +330,7 @@ DGP2 <- readRDS("./Saved_objects/SEI3R_CIR/mdl_12/summary_Z.rds") |>
   mutate(DGP = "2")
 
 sim_Z_df <- bind_rows(DGP1, DGP2) |> 
-  mutate(week = time / 7)
+  mutate(week = time)
 
 DGP3 <- SMTH_obj$sim_mob |> mutate(DGP = SMTH_obj$label) |> 
   filter(week >= 1 & week <= 11)
@@ -352,7 +354,7 @@ DGP2 <- readRDS("./Saved_objects/SEI3R_CIR/mdl_12/summary_Re.rds") |>
   mutate(DGP = "2")
 
 sim_Re_df <- bind_rows(DGP1, DGP2) |> 
-  mutate(week = time / 7)
+  mutate(week = time)
 
 DGP3 <- SMTH_obj$Re_t|> mutate(DGP = SMTH_obj$label) |> 
   filter(week >= 1 & week <= 11)
@@ -371,10 +373,10 @@ print(g)
 
 
 ```{r}
-fig_path <- "./paper_plots/Fig_07_Comparison.pdf"
+fig_path <- "./paper_plots/Fig_07_Comparison_thesis.pdf"
 ggsave(fig_path, g, height = 7, width = 5, device = cairo_pdf)
 
-ggsave("./paper_plots/Fig_07_Comparison.eps", g, height = 7, width = 5, 
+ggsave("./paper_plots/Fig_07_Comparison_thesis.eps", g, height = 7, width = 5, 
        device = cairo_ps)
 ```
        

@@ -75,8 +75,63 @@ run_stan_file <- function(order, fit_options, backup_folder, stan_folder) {
   results
 }
 
+run_stan_files <- function(n_orders, stan_d, folder, ad_list, sz_list, mt_list) {
+  
+  posterior_list <- lapply(1:n_orders, \(dly_o) {
+    
+    ad <- ad_list[[dly_o]]
+    sz <- sz_list[[dly_o]]
+    mt <- mt_list[[dly_o]]
+    
+    fn <- file.path(folder, str_glue("stan_fit_order_{dly_o}.rds"))
+    
+    if(!file.exists(fn)) {
+      
+      stan_path <- str_glue("./Stan_files/SEI3R_{dly_o}_smth.stan")
+      mod       <- cmdstan_model(stan_path)
+      
+      message(str_glue("Delay: {dly_o}"))
+      message(str_glue("Step size: {sz}"))
+      message(str_glue("Adapt delta: {ad}"))
+      message(str_glue("Max treedepth: {mt}"))
+      
+      tic.clearlog()
+      tic()
+      
+      fit <- mod$sample(data            = stan_d,
+                        chains          = 4,
+                        parallel_chains = 4,
+                        iter_warmup     = 2000,
+                        iter_sampling   = 2000,
+                        refresh         = 100,
+                        save_warmup     = FALSE,
+                        adapt_delta     = ad,
+                        step_size       = sz,
+                        max_treedepth   = mt)
+      
+      toc(quiet = FALSE, log = TRUE)
+      log.lst <- tic.log(format = FALSE)
+      
+      diag_path <- file.path(backup_folder, str_glue("diag_{dly_o}.txt"))
+      diagnosis <- fit$cmdstan_diagnose()
+      writeLines(diagnosis$stdout, diag_path)
+      
+      posterior_df <- as_draws_df(fit$draws())
+      
+      results <- list(sf = posterior_df, time = log.lst) 
+      
+      saveRDS(results, fn)
+      
+    } else {
+      results <- readRDS(fn)
+    }
+    
+    results
+  })
+}
+
 construct_incidence_df <- function(posterior_df, dly_o) {
-  extract_timeseries_var("y1_hat", posterior_df) %>% 
+  extract_timeseries_var("delta_x_1", posterior_df) %>% 
     mutate(order = dly_o)
 }
 

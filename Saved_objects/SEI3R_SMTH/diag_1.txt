@@ -1,4 +1,4 @@
-Processing csv files: /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/Rtmpy8B2wJ/SEI3R_1_smth-202108091934-1-0119e3.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/Rtmpy8B2wJ/SEI3R_1_smth-202108091934-2-0119e3.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/Rtmpy8B2wJ/SEI3R_1_smth-202108091934-3-0119e3.csv, /var/folders/qn/kbf2gj495571njxwy_5jr7cr0000gn/T/Rtmpy8B2wJ/SEI3R_1_smth-202108091934-4-0119e3.csv
+Processing csv files: /var/folders/51/j15clly97bl0z25f9q1s9hdm0000gn/T/RtmpdONYvA/SEI3R_1_smth-202309141736-1-313a5e.csv, /var/folders/51/j15clly97bl0z25f9q1s9hdm0000gn/T/RtmpdONYvA/SEI3R_1_smth-202309141736-2-313a5e.csv, /var/folders/51/j15clly97bl0z25f9q1s9hdm0000gn/T/RtmpdONYvA/SEI3R_1_smth-202309141736-3-313a5e.csv, /var/folders/51/j15clly97bl0z25f9q1s9hdm0000gn/T/RtmpdONYvA/SEI3R_1_smth-202309141736-4-313a5e.csv
 
 Checking sampler transitions treedepth.
 Treedepth satisfactory for all transitions.

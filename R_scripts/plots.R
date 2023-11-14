@@ -402,9 +402,11 @@ plot_time_comparison <- function(time_df, tt){
 
 
 plot_traces <- function(sf, pars) {
+  
   traces_cols <- c("#D8DDB7", "#F5F3E7", "#1B4D60", "#578372")
   
-  traceplot(sf, pars = pars) +
+  as_draws_array(sf) |> 
+    bayesplot::mcmc_trace(pars = pars[1:4]) +
     scale_colour_manual(values = traces_cols) +
     facet_wrap(~parameter, labeller = label_parsed, scales = "free")
 }

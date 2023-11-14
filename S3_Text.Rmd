@@ -184,7 +184,7 @@ Maximum Likelihood Estimate (MLE) via Iterated Filtering. We repeat this process
 
 ```{r}
 source("./R_scripts/local_search.R")
-ptb    <- rw.sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, alpha = 0.02, 
+ptb    <- rw_sd(P_0 = ivp(0.02), tau = 0.02, zeta = 0.02, alpha = 0.02, 
                 phi = 0.02)
 
 fn     <- file.path(folder, "local_search.rds")
@@ -427,7 +427,7 @@ perturbations.
 \hfill
 
 ```{r}
-zeta_ptb <- rw.sd(P_0 = ivp(0.02), tau = 0.02, alpha = 0.02, phi = 0.02)
+zeta_ptb <- rw_sd(P_0 = ivp(0.02), tau = 0.02, alpha = 0.02, phi = 0.02)
 
 fn_ifp     <- file.path(folder, "ifp_zeta.rds" )
 
@@ -586,7 +586,7 @@ plot_guesses(guesses, 0.25, GBM_colour)
 \hfill
 
 ```{r}
-P_0_ptb <- rw.sd(zeta = 0.02, tau = 0.02, alpha = 0.02, phi = 0.02)
+P_0_ptb <- rw_sd(zeta = 0.02, tau = 0.02, alpha = 0.02, phi = 0.02)
 
 fn_ifp     <- file.path(folder, "ifp_P_0.rds" )
 
@@ -737,7 +737,7 @@ plot_guesses(guesses, 0.25, GBM_colour)
 \hfill
 
 ```{r}
-alpha_ptb <- rw.sd(zeta = 0.02, tau = 0.02, P_0 = ivp(0.02), phi = 0.02)
+alpha_ptb <- rw_sd(zeta = 0.02, tau = 0.02, P_0 = ivp(0.02), phi = 0.02)
 
 fn_ifp     <- file.path(folder, "ifp_alpha.rds" )
 
@@ -889,7 +889,7 @@ plot_guesses(guesses, 0.25, GBM_colour)
 \hfill
 
 ```{r}
-tau_ptb <- rw.sd(zeta = 0.02, alpha = 0.02, P_0 = ivp(0.02), phi = 0.02)
+tau_ptb <- rw_sd(zeta = 0.02, alpha = 0.02, P_0 = ivp(0.02), phi = 0.02)
 
 fn_ifp  <- file.path(folder, "ifp_tau.rds" )
 
@@ -1042,7 +1042,7 @@ plot_guesses(guesses, 0.25, GBM_colour)
 
 ```{r}
 source("./R_scripts/likelihood_funs.R")
-phi_ptb <- rw.sd(zeta = 0.02, alpha = 0.02, P_0 = ivp(0.02), tau = 0.02)
+phi_ptb <- rw_sd(zeta = 0.02, alpha = 0.02, P_0 = ivp(0.02), tau = 0.02)
 
 fn_ifp     <- file.path(folder, "ifp_phi.rds" )
 
@@ -1267,6 +1267,9 @@ knitr::kable(par_summary |>  arrange(Parameter), "latex", booktabs = TRUE,
 
 ```{r GBM_par_summary_g, dev = 'cairo_pdf'}
 all_est <- rbind(surf_est, mcap_est, prof_est)
+
+fn_est <- file.path(folder, "par_estimates.csv")
+write_csv(all_est, fn_est)
 
 par_comparison_stochastic(all_est)
 ```

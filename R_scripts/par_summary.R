@@ -83,7 +83,7 @@ summarise_predicted_Re <- function(pst_df, Z_df, dly_o) {
   mdl_path  <- str_glue("./models/SEI3R_order_{dly_o}.stmx")
   mdl       <- read_xmile(mdl_path)
   stocks    <- sd_stocks(mdl)
-  S_df      <- extract_timeseries_stock("S", pst_df, stocks, "o")
+  S_df      <- extract_timeseries_stock("S", pst_df, stocks, "x")
   
   S_df |>  mutate(s = value / 4937796) -> s_df
   
